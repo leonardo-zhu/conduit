@@ -54,6 +54,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy Conduit on Self-hosted Runner
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
         run: |
           set -euo pipefail
           DEPLOY_DIR="/opt/stacks/conduit"
@@ -67,12 +70,22 @@ jobs:
           cp compose.yaml "$DEPLOY_DIR/compose.yaml"
           cd "$DEPLOY_DIR"
 
+          # R4S 经 OpenClash 访问 ghcr.io，偶尔会断（EOF），登录和拉取都重试几次
+          retry() {
+            for i in 1 2 3 4 5; do
+              "$@" && return 0
+              echo "第 $i 次失败，10 秒后重试：$*"
+              sleep 10
+            done
+            return 1
+          }
+
           # Login to GHCR on host
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          retry sh -c 'echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin'
 
           # 固定到本次构建的镜像；new-api 的版本由 compose.yaml 决定
           export ADAPTER_TAG="${{ github.sha }}"
-          docker compose pull
+          retry docker compose pull
           docker compose up -d --remove-orphans
 
           # Automatically clean up dangling old images left after updates (<none>:<none>)
