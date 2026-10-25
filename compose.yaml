@@ -1,0 +1,66 @@
+# Conduit — R4S 上的 /opt/stacks/conduit/compose.yaml
+# 由 GitHub Actions 部署时从仓库拷过去，不要在服务器上直接改（改了会被下次部署覆盖）。
+#
+# 两个服务：
+#   new-api  官方镜像，不改源码。负责令牌、额度、渠道、模型重定向、日志、管理后台。
+#   adapter  本仓库 adapter/ 目录，CI 构建后推到 GHCR。Responses ↔ Chat 转换，作为 NewAPI 的一个渠道。
+#
+# 和 R4S 其他 stack 一致：network_mode: host + restart: unless-stopped。
+# 端口：3000（gh-mcp）、4000（个人站）已被占用，这里用 3010 / 3011。
+
+services:
+  new-api:
+    image: calciumion/new-api:${NEW_API_TAG:-v1.0.0-rc.47}
+    container_name: conduit-new-api
+    restart: unless-stopped
+    network_mode: host
+    command: --log-dir /app/logs
+    env_file:
+      - .env
+    environment:
+      - PORT=3010
+      - TZ=Asia/Shanghai
+      # 不设 SQL_DSN → 使用 SQLite（/data/one-api.db），单机够用，不必再起 Postgres
+      # 批量写入：用量和额度每 5 秒合并落库一次，减少 TF 卡写入
+      - BATCH_UPDATE_ENABLED=true
+      - BATCH_UPDATE_INTERVAL=5
+      - MEMORY_CACHE_ENABLED=true
+      - SYNC_FREQUENCY=60
+      - ERROR_LOG_ENABLED=true
+      - STREAMING_TIMEOUT=300
+      # 只经 Caddy 以 HTTPS 访问后台
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-true}
+      - SESSION_COOKIE_TRUSTED_URL=${CONDUIT_URL:-https://conduit.r4s.leonardo-zhu.me}
+      - TRUSTED_PROXIES=127.0.0.1
+    volumes:
+      - ${CONDUIT_DATA_DIR:-/opt/conduit}/new-api/data:/data
+      - ${CONDUIT_DATA_DIR:-/opt/conduit}/new-api/logs:/app/logs
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3010/api/status | grep -q '\"success\":true'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "app=conduit"
+
+  adapter:
+    image: ghcr.io/leonardo-zhu/conduit-adapter:${ADAPTER_TAG:-latest}
+    container_name: conduit-adapter
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=3011
+      # 只给同机的 NewAPI 访问
+      - HOST=127.0.0.1
+      # 设为 1 会把完整请求/响应写进 logs/，仅限本地调试
+      - ADAPTER_DEBUG_LOG=0
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3011/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "app=conduit"
