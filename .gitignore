@@ -2,4 +2,5 @@
 .env.local
 node_modules
 logs/
+.data/
 .idea/
