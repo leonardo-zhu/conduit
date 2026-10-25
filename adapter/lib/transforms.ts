@@ -114,6 +114,11 @@ export function responsesToChat(): Transform {
     // max_output_tokens → max_tokens
     if (max_output_tokens != null) result.max_tokens = max_output_tokens;
 
+    // 流式时要求上游在末尾返回 usage，网关按它记账
+    if (result.stream === true) {
+      result.stream_options = { ...(result.stream_options as Body | undefined), include_usage: true };
+    }
+
     // text.format → response_format
     if (text && typeof text === "object") {
       const format = (text as Record<string, unknown>).format;
@@ -302,6 +307,10 @@ export function createChatToResponsesSSETransformer(): TransformStream<Uint8Arra
   let inThinkTag = false;        // 是否在 `<think>` 标签内（用于 strip）
   let finished = false;          // 是否已处理过 finish_reason，防止重复发 response.completed
   let doneReceived = false;      // 是否已收到上游 [DONE]
+  let completedSent = false;     // 是否已发 response.completed
+  let finalStatus = "completed";
+  // include_usage 时 usage 在 finish_reason 之后的单独 chunk 里，所以 response.completed 推迟到流结束再发
+  let latestUsage: Record<string, unknown> | undefined;
 
   // 追踪并行 tool_calls: index → {id, name, arguments}
   const pendingToolCalls = new Map<number, { id: string; name: string; arguments: string }>();
@@ -480,6 +489,8 @@ export function createChatToResponsesSSETransformer(): TransformStream<Uint8Arra
       });
     }
 
+    if (json.usage) latestUsage = json.usage as Record<string, unknown>;
+
     if (!delta) return out;
 
     // 处理 content delta（含 `<think>` 推理标签处理）
@@ -571,28 +582,29 @@ export function createChatToResponsesSSETransformer(): TransformStream<Uint8Arra
       }
       pendingToolCalls.clear();
 
-      // usage
-      const usage = json.usage as Record<string, unknown> | undefined;
-      const respUsage = usage ? {
-        input_tokens: usage.prompt_tokens ?? 0,
-        output_tokens: usage.completion_tokens ?? 0,
-        total_tokens: usage.total_tokens ?? 0,
-      } : { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
-
-      const status = finishReason === "length" ? "incomplete" : "completed";
-
-      out += emitEvent("response.completed", {
-        type: "response.completed",
-        response: {
-          id: responseId, object: "response", created_at: createdAt,
-          model, status, output: completedItems, usage: respUsage,
-        },
-      });
-
-      out += "event: done\ndata: [DONE]\n\n";
+      finalStatus = finishReason === "length" ? "incomplete" : "completed";
     }
 
     return out;
+  }
+
+  /** 流结束时发 response.completed（带最终 usage），只发一次 */
+  function emitCompleted(): string {
+    if (completedSent) return "";
+    completedSent = true;
+    const usage = latestUsage;
+    const respUsage = usage ? {
+      input_tokens: usage.prompt_tokens ?? 0,
+      output_tokens: usage.completion_tokens ?? 0,
+      total_tokens: usage.total_tokens ?? 0,
+    } : { input_tokens: 0, output_tokens: 0, total_tokens: 0 };
+    return emitEvent("response.completed", {
+      type: "response.completed",
+      response: {
+        id: responseId, object: "response", created_at: createdAt,
+        model, status: finalStatus, output: completedItems, usage: respUsage,
+      },
+    });
   }
 
   return new TransformStream<Uint8Array, Uint8Array>({
@@ -611,8 +623,7 @@ export function createChatToResponsesSSETransformer(): TransformStream<Uint8Arra
             const flush = processChunk({ choices: [{ delta: {}, finish_reason: "stop" }] });
             if (flush) controller.enqueue(encoder.encode(flush));
           }
-          // 确保发 [DONE] 标记
-          controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+          controller.enqueue(encoder.encode(emitCompleted() + "event: done\ndata: [DONE]\n\n"));
           return;
         }
         if (trimmed.startsWith("data: ")) {
@@ -644,7 +655,7 @@ export function createChatToResponsesSSETransformer(): TransformStream<Uint8Arra
           const flush = processChunk({ choices: [{ delta: {}, finish_reason: "stop" }] });
           if (flush) controller.enqueue(encoder.encode(flush));
         }
-        controller.enqueue(encoder.encode("event: done\ndata: [DONE]\n\n"));
+        controller.enqueue(encoder.encode(emitCompleted() + "event: done\ndata: [DONE]\n\n"));
       }
     },
   });
