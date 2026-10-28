@@ -186,15 +186,15 @@
 
   const state = document.getElementById("state");
   const stateText = document.getElementById("state-text");
-  fetch(`${base}/_home/status`, { cache: "no-store" })
-    .then((r) => r.json())
-    .then((j) => {
-      if (!j.ok) throw new Error();
-      state.dataset.s = "ok";
-      stateText.textContent = "运行中";
-      if (j.version) document.getElementById("version").textContent = j.version;
-    })
-    .catch(() => { state.dataset.s = "down"; stateText.textContent = "无法获取状态"; });
+  const status = /*__STATUS__*/ null;
+  if (status && status.ok) {
+    state.dataset.s = "ok";
+    stateText.textContent = "运行中";
+    if (status.version) document.getElementById("version").textContent = status.version;
+  } else {
+    state.dataset.s = "down";
+    stateText.textContent = "无法获取状态";
+  }
 
   /* NewAPI 的 iframe 带 sandbox，读不到外层主题，只能跟随系统 */
   const mq = matchMedia("(prefers-color-scheme: dark)");
