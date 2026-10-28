@@ -2,10 +2,17 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import '@/mock/handlers'
 import { isMockResult, match } from '@/mock/router'
+import { readSession } from '@/server/auth'
+
+// 不登录也能访问的接口：登录页要用的站点状态和公告
+const PUBLIC_PATHS = new Set(['/api/status', '/api/notice'])
 
 // 假数据接口的统一入口，见 src/mock/。真实接口写成具体路由后会优先于这里匹配
 async function handle(req: NextRequest) {
-  const path = req.nextUrl.pathname
+  const path = req.nextUrl.pathname.replace(/\/+$/, '')
+  if (!PUBLIC_PATHS.has(path) && !readSession(req)) {
+    return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
+  }
   const found = match(req.method, path)
 
   if (!found) {
