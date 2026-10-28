@@ -145,7 +145,17 @@
   baseEl.textContent = base;
 
   const flash = (el, text, orig) => { el.textContent = text; setTimeout(() => (el.textContent = orig), 1200); };
-  const copyText = async (t) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
+  // 嵌在 NewAPI 的 sandbox iframe 里时 Clipboard API 会被拒，退回 execCommand
+  const copyText = async (t) => {
+    try { await navigator.clipboard.writeText(t); return true; } catch {}
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch {}
+    ta.remove();
+    return ok;
+  };
 
   baseEl.addEventListener("click", async () => flash(baseEl, (await copyText(base)) ? "已复制" : "复制失败", base));
 
@@ -176,46 +186,21 @@
 
   const state = document.getElementById("state");
   const stateText = document.getElementById("state-text");
-  fetch("/api/status", { cache: "no-store" })
+  fetch(`${base}/_home/status`, { cache: "no-store" })
     .then((r) => r.json())
     .then((j) => {
-      if (!j.success) throw new Error();
+      if (!j.ok) throw new Error();
       state.dataset.s = "ok";
       stateText.textContent = "运行中";
-      const v = j.data && j.data.version;
-      if (v) document.getElementById("version").textContent = v;
+      if (j.version) document.getElementById("version").textContent = j.version;
     })
     .catch(() => { state.dataset.s = "down"; stateText.textContent = "无法获取状态"; });
 
-  /* 同源 iframe 时跟随外层 NewAPI 主题，否则跟随系统 */
-  const root = document.documentElement;
+  /* NewAPI 的 iframe 带 sandbox，读不到外层主题，只能跟随系统 */
   const mq = matchMedia("(prefers-color-scheme: dark)");
-  const attrs = ["class", "theme-mode", "data-theme"];
-  const parentDark = () => {
-    try {
-      if (window.parent === window) return null;
-      const p = window.parent.document;
-      const nodes = [p.documentElement, p.body];
-      const has = (v) => nodes.some((n) => n.classList.contains(v) || n.getAttribute("theme-mode") === v || n.getAttribute("data-theme") === v);
-      if (has("dark")) return true;
-      if (has("light")) return false;
-    } catch {}
-    return null;
-  };
-  const apply = () => {
-    const d = parentDark();
-    root.dataset.theme = (d === null ? mq.matches : d) ? "dark" : "light";
-  };
+  const apply = () => { document.documentElement.dataset.theme = mq.matches ? "dark" : "light"; };
   apply();
   mq.addEventListener("change", apply);
-  try {
-    if (window.parent !== window) {
-      const o = new MutationObserver(apply);
-      const opt = { attributes: true, attributeFilter: attrs };
-      o.observe(window.parent.document.documentElement, opt);
-      o.observe(window.parent.document.body, opt);
-    }
-  } catch {}
 })();
 </script>
 </body>
