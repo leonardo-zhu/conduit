@@ -55,24 +55,20 @@ export function startProxy(config: ServerConfig) {
         return Response.json({ status: "ok", timestamp: new Date().toISOString() });
       }
 
-      // NewAPI「首页内容」以 iframe 嵌入的静态首页，由 Caddy 把 /_home 转过来
+      // NewAPI「首页内容」以 iframe 嵌入的静态首页，由 Caddy 把 /_home 转过来。
+      // 该 iframe 带 sandbox 且没有 allow-same-origin，页面里不能再请求 /api/status（跨域），
+      // 所以服务端取好状态直接写进 HTML。
       if (url.pathname === "/_home" || url.pathname === "/_home/") {
-        return new Response(Bun.file(HOME_PAGE), {
-          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
-        });
-      }
-
-      // NewAPI 嵌入首页的 iframe 带 sandbox 且没有 allow-same-origin，页面是跨域来源，
-      // 不能直接读 /api/status，所以在这里转一份最小信息并放开 CORS
-      if (url.pathname === "/_home/status") {
-        const cors = { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" };
+        let status = { ok: false, version: "" };
         try {
-          const r = await fetch(`${NEWAPI_URL}/api/status`, { signal: AbortSignal.timeout(3000) });
+          const r = await fetch(`${NEWAPI_URL}/api/status`, { signal: AbortSignal.timeout(2000) });
           const j = (await r.json()) as { success?: boolean; data?: { version?: string } };
-          return Response.json({ ok: j.success === true, version: j.data?.version ?? "" }, { headers: cors });
-        } catch {
-          return Response.json({ ok: false, version: "" }, { headers: cors });
-        }
+          status = { ok: j.success === true, version: j.data?.version ?? "" };
+        } catch {}
+        const html = (await Bun.file(HOME_PAGE).text()).replace("/*__STATUS__*/ null", JSON.stringify(status));
+        return new Response(html, {
+          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+        });
       }
 
       const route = routes
