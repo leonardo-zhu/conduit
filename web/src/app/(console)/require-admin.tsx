@@ -12,9 +12,10 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   const role = useAuthStore((s) => s.auth.user?.role)
   const isAdmin = role !== undefined && role >= ROLE.ADMIN
 
+  // 未登录（含刚退出）交给登录跳转处理，只有已登录但不是管理员才去 403
   useEffect(() => {
-    if (!isAdmin) router.replace('/403')
-  }, [isAdmin, router])
+    if (role !== undefined && !isAdmin) router.replace('/403')
+  }, [role, isAdmin, router])
 
   return isAdmin ? <>{children}</> : null
 }
