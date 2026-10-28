@@ -1,7 +1,13 @@
 # 追加到 /opt/stacks/caddy/Caddyfile。
-# 只反代 NewAPI；adapter 只监听 127.0.0.1，不对外。
+# 只反代 NewAPI 和首页；adapter 的其余路由只监听 127.0.0.1，不对外。
 # Caddy 遇到 text/event-stream 会自动即时 flush，流式响应不需要额外配置。
 
 conduit.r4s.leonardo-zhu.me {
-	reverse_proxy 127.0.0.1:3010
+	# 自定义首页（NewAPI「首页内容」里填 https://conduit.r4s.leonardo-zhu.me/_home/）
+	handle /_home* {
+		reverse_proxy 127.0.0.1:3011
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3010
+	}
 }
