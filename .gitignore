@@ -4,3 +4,4 @@ node_modules
 logs/
 .data/
 .idea/
+reference/
