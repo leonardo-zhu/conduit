@@ -4,6 +4,7 @@ WORKDIR /app
 COPY index.ts globals.d.ts tsconfig.json ./
 COPY lib ./lib
 COPY proxies ./proxies
+COPY home ./home
 
 USER bun
 CMD ["bun", "run", "index.ts"]

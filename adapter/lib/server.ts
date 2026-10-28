@@ -30,6 +30,8 @@ export interface ServerConfig {
 // 请求体可能含用户内容，默认不落盘（Conduit 隐私约定 §7），只在本地调试时打开
 const DEBUG_LOG = process.env.ADAPTER_DEBUG_LOG === "1";
 
+const HOME_PAGE = new URL("../home/index.html", import.meta.url).pathname;
+
 function debugLog(text: string) {
   if (!DEBUG_LOG) return;
   try {
@@ -50,6 +52,13 @@ export function startProxy(config: ServerConfig) {
 
       if (url.pathname === "/health") {
         return Response.json({ status: "ok", timestamp: new Date().toISOString() });
+      }
+
+      // NewAPI「首页内容」以 iframe 嵌入的静态首页，由 Caddy 把 /_home 转过来
+      if (url.pathname === "/_home" || url.pathname === "/_home/") {
+        return new Response(Bun.file(HOME_PAGE), {
+          headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
+        });
       }
 
       const route = routes

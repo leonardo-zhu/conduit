@@ -63,6 +63,16 @@ TF 卡写入：SQLite 在 `/opt/conduit/new-api/data`，用量通过 `BATCH_UPDA
 
 7. **立刻**打开 `https://conduit.r4s.leonardo-zhu.me` 完成管理员初始化，设置强密码。在此之前，任何能访问到它的人都可能抢先初始化。
 
+## 自定义首页
+
+NewAPI 默认首页是通用的 API 网关宣传页。这里用 `adapter/home/index.html` 替换它：adapter 在 `/_home/` 托管这个页面，NewAPI 的「首页内容」填 URL 后会以 iframe 嵌入，顶栏的登录、主题、语言切换照常保留。
+
+1. Caddy 要有 `/_home*` 转到 3011 的规则（见 `deploy/Caddyfile.snippet`），改完 `docker compose restart`。已部署的机器需要手动更新一次。
+2. 部署后，在后台 **系统设置 → 运营设置 → 首页内容** 填 `https://conduit.r4s.leonardo-zhu.me/_home/`，保存。这个值存在 NewAPI 的数据库里，不在仓库中。
+3. 之后改页面只需要改 `adapter/home/index.html` 并推送，不用再动后台。想恢复默认首页，把「首页内容」清空即可。
+
+页面会读取 `/api/status` 显示服务状态和版本，并跟随外层 NewAPI 的明暗主题。
+
 ## NewAPI 初始配置
 
 ### 渠道（上游）
