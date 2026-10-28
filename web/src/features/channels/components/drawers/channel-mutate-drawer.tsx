@@ -91,7 +91,6 @@ function getSchema(t: (key: string) => string, isUpdate: boolean) {
     models: z.array(z.string()).min(1, t('Add at least one model alias')),
     model_mapping: z.string(),
     test_model: z.string(),
-    auto_ban: z.boolean(),
     enabled: z.boolean(),
     remark: z.string(),
   })
@@ -107,7 +106,6 @@ const EMPTY_VALUES: FormValues = {
   models: [],
   model_mapping: '',
   test_model: '',
-  auto_ban: true,
   enabled: true,
   remark: '',
 }
@@ -121,7 +119,6 @@ function toFormValues(channel: Channel): FormValues {
     models: channel.models.split(',').filter(Boolean),
     model_mapping: channel.model_mapping ?? '',
     test_model: channel.test_model ?? '',
-    auto_ban: (channel.auto_ban ?? 1) === 1,
     enabled: channel.status === CHANNEL_STATUS.ENABLED,
     remark: channel.remark ?? '',
   }
@@ -135,7 +132,8 @@ function toPayload(values: FormValues): Partial<Channel> {
     models: values.models.join(','),
     model_mapping: values.model_mapping.trim() || null,
     test_model: values.test_model || null,
-    auto_ban: values.auto_ban ? 1 : 0,
+    // 需求不含渠道自动禁用
+    auto_ban: 0,
     status: values.enabled
       ? CHANNEL_STATUS.ENABLED
       : CHANNEL_STATUS.MANUAL_DISABLED,
@@ -379,28 +377,6 @@ export function ChannelMutateDrawer({
                       </NativeSelect>
                     </FormControl>
                     <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='auto_ban'
-                render={({ field }) => (
-                  <FormItem className={sideDrawerSwitchItemClassName()}>
-                    <div className='flex flex-col gap-0.5'>
-                      <FormLabel className='text-sm'>
-                        {t('Auto-disable channel')}
-                      </FormLabel>
-                      <FormDescription className='text-xs'>
-                        {t('Disable this upstream automatically when requests keep failing')}
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
                   </FormItem>
                 )}
               />

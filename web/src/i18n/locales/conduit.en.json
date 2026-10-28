@@ -32,7 +32,6 @@
   "Alias to upstream model": "Alias to upstream model",
   "Changing the upstream model here takes effect immediately; apps keep using the alias": "Changing the upstream model here takes effect immediately; apps keep using the alias",
   "First alias": "First alias",
-  "Disable this upstream automatically when requests keep failing": "Disable this upstream automatically when requests keep failing",
   "Failed to save channel": "Failed to save channel",
   "Filter by app ID or name...": "Filter by app ID or name..."
 }

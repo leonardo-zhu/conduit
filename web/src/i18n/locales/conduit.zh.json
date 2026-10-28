@@ -32,7 +32,6 @@
   "Alias to upstream model": "别名 → 上游模型",
   "Changing the upstream model here takes effect immediately; apps keep using the alias": "在这里更换上游模型立即生效，应用照常使用别名",
   "First alias": "第一个别名",
-  "Disable this upstream automatically when requests keep failing": "请求持续失败时自动禁用这个上游",
   "Failed to save channel": "保存渠道失败",
   "Filter by app ID or name...": "按应用标识或名称筛选..."
 }
