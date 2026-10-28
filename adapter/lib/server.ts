@@ -30,7 +30,8 @@ export interface ServerConfig {
 // 请求体可能含用户内容，默认不落盘（Conduit 隐私约定 §7），只在本地调试时打开
 const DEBUG_LOG = process.env.ADAPTER_DEBUG_LOG === "1";
 
-const HOME_PAGE = new URL("../home/index.html", import.meta.url).pathname;
+const NEWAPI_URL = process.env.NEWAPI_URL ?? "http://127.0.0.1:3010";
+const HOME_PAGE =new URL("../home/index.html", import.meta.url).pathname;
 
 function debugLog(text: string) {
   if (!DEBUG_LOG) return;
@@ -59,6 +60,19 @@ export function startProxy(config: ServerConfig) {
         return new Response(Bun.file(HOME_PAGE), {
           headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" },
         });
+      }
+
+      // NewAPI 嵌入首页的 iframe 带 sandbox 且没有 allow-same-origin，页面是跨域来源，
+      // 不能直接读 /api/status，所以在这里转一份最小信息并放开 CORS
+      if (url.pathname === "/_home/status") {
+        const cors = { "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" };
+        try {
+          const r = await fetch(`${NEWAPI_URL}/api/status`, { signal: AbortSignal.timeout(3000) });
+          const j = (await r.json()) as { success?: boolean; data?: { version?: string } };
+          return Response.json({ ok: j.success === true, version: j.data?.version ?? "" }, { headers: cors });
+        } catch {
+          return Response.json({ ok: false, version: "" }, { headers: cors });
+        }
       }
 
       const route = routes
