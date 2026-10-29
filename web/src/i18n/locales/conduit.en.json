@@ -118,11 +118,18 @@
   "Model name as the upstream expects it": "Model name as the upstream expects it",
   "Endpoints": "Endpoints",
   "Converted": "Converted",
-  "The upstream /chat/completions; every upstream is assumed to support it": "The upstream /chat/completions; every upstream is assumed to support it",
-  "Responses API (native)": "Responses API (native)",
-  "The upstream has /responses; requests are forwarded as-is": "The upstream has /responses; requests are forwarded as-is",
   "Convert in the gateway": "Convert in the gateway",
-  "Offer /v1/responses by converting to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.": "Offer /v1/responses by converting to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.",
   "Apps can call": "Apps can call",
-  "converted by the gateway": "converted by the gateway"
+  "converted by the gateway": "converted by the gateway",
+  "Start the address with http:// or https://": "Start the address with http:// or https://",
+  "Calls to /v1/responses are rejected with a hint to use /v1/chat/completions": "Calls to /v1/responses are rejected with a hint to use /v1/chat/completions",
+  "The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.": "The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.",
+  "The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is": "The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is",
+  "Not offered": "Not offered",
+  "Native": "Native",
+  "OpenAI-compatible base URL": "OpenAI-compatible base URL",
+  "Always offered": "Always offered",
+  "Anthropic-compatible base URL": "Anthropic-compatible base URL",
+  "(optional)": "(optional)",
+  "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API.": "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API."
 }

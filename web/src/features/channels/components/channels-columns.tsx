@@ -309,7 +309,8 @@ export function useChannelsColumns(
         accessorKey: 'responses_mode',
         header: t('Endpoints'),
         cell: ({ row }) => {
-          const mode = (row.original as Channel).responses_mode ?? 'none'
+          const channel = row.original as Channel
+          const mode = channel.responses_mode ?? 'none'
           return (
             <div className='flex items-center gap-1'>
               <StatusBadge label='Chat' variant='neutral' size='sm' copyable={false} />
@@ -321,10 +322,13 @@ export function useChannelsColumns(
                   copyable={false}
                 />
               )}
+              {channel.anthropic_base_url && (
+                <StatusBadge label='Anthropic' variant='orange' size='sm' copyable={false} />
+              )}
             </div>
           )
         },
-        size: 200,
+        size: 260,
         enableSorting: false,
       },
 

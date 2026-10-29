@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **网关**：`/v1/chat/completions`、`/v1/responses`、`/v1/models`，应用自己选调哪个。应用只认别名，别名指向某个上游的某个模型。每个上游都提供 Chat Completions；Responses API 按上游设置：原生支持就直接转发，不支持可以开启网关转换（Chat ↔ Responses，流式照常），也可以不提供。
+- **网关**：OpenAI 格式的 `/v1/chat/completions`、`/v1/responses`，Anthropic 格式的 `/v1/messages`，以及 `/v1/models`，应用自己选调哪个。应用只认别名，别名指向某个上游的某个模型。上游按协议配地址，不区分服务商：OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 可以原生支持、由网关转换（Chat ↔ Responses，流式照常）或不提供；Anthropic 兼容地址选填，填了就提供 `/v1/messages`，只直接转发、不和 OpenAI 格式互转。
 - **鉴权和额度**：每台设备或服务实例一个令牌（只存哈希），可设过期时间、模型白名单、IP 白名单、额度；应用有共享的总额度，可按月重置。
 - **记账**：每个请求记一条用量（只记元数据，不记内容）；上游没返回 usage 时按字符数估算并标出来。
 - **管理后台**：账号密码 + Passkey 登录；上游、应用、别名、令牌的管理；使用日志、数据看板。
@@ -21,13 +21,14 @@
                                     web :3012（Next.js，本仓库 web/）
                      管理后台 · 令牌 · 额度 · 别名 · 用量 · 协议转换 · SQLite
                                   │
-                    /v1/chat/completions → 上游的 /chat/completions（直接转发）
-                    /v1/responses        → 上游原生支持：上游的 /responses（直接转发）
-                                           开启网关转换：转成 Chat 发给上游，结果转回来
-                                           都没有：拒绝，提示改用 /v1/chat/completions
+                    /v1/chat/completions → OpenAI 兼容地址/chat/completions（直接转发）
+                    /v1/responses        → 原生：OpenAI 兼容地址/responses（直接转发）
+                                           网关转换：转成 Chat 发给上游，结果转回来
+                                           不提供：拒绝，提示改用 /v1/chat/completions
+                    /v1/messages         → Anthropic 兼容地址/v1/messages（直接转发，没填地址就拒绝）
                                   │
                                   ▼
-                       上游（不区分服务商：地址 + 密钥）
+               上游（不区分服务商：OpenAI 兼容地址 + 选填的 Anthropic 兼容地址 + 密钥）
 
 网关发现异常 ──▶ 事件表（后台铃铛） ──新事件──▶ Telegram 频道
 ```

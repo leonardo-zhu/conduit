@@ -80,11 +80,12 @@ db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHE
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
 const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
-const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, anthropic_base_url: `${MOCK_FOR_GATEWAY}/anthropic/`, key: 'mock-native-key' } })
 const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
 const chatOnlyUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chatonly', base_url: MOCK_FOR_GATEWAY, key: 'mock-chatonly-key' } })
 check('按指定的 Responses 方式保存', nativeUp.responses_mode === 'native', nativeUp.responses_mode)
 check('新建上游默认不提供 Responses', chatOnlyUp.responses_mode === 'none', chatOnlyUp.responses_mode)
+check('Anthropic 地址去掉结尾斜杠', nativeUp.anthropic_base_url === `${MOCK_FOR_GATEWAY}/anthropic`, nativeUp.anthropic_base_url)
 
 const app = await admin('POST', '/api/user', { username: 'smoke-gw', quota: 0 })
 const alias = (name, upstream, model) => ({ name, upstream_id: upstream.id, upstream_model: model })
@@ -214,6 +215,50 @@ check('返回 Chat 的 chunk', events[0]?.object === 'chat.completion.chunk', ev
 await sleep(200)
 log = lastLog('smoke-gw-req-5')
 check('记账：10 / 5', log?.input_tokens === 10 && log.output_tokens === 5, log)
+
+// ---------------------------------------------------------------------------
+console.log('\n/v1/messages（Anthropic，直接转发）')
+
+const anthropic = (body, headers = {}) =>
+  fetch(BASE + '/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': `sk-${key}`, ...headers },
+    body: JSON.stringify(body),
+  })
+
+res = await anthropic({ model: 'smoke-gw-native', max_tokens: 64, messages: [{ role: 'user', content: '你好' }] }, { 'X-Request-Id': 'smoke-gw-req-a1' })
+json = await res.json()
+upstreamReq = await mockLast()
+check('x-api-key 鉴权通过，非流式返回 Anthropic 消息', res.status === 200 && json.content?.[0]?.text === 'Anthropic 回答', json)
+check(
+  '转发到 <Anthropic 地址>/v1/messages，换成上游模型并带上密钥和默认版本',
+  upstreamReq.path === '/anthropic/v1/messages' && upstreamReq.body.model === 'normal' && upstreamReq.apiKey === 'mock-native-key' && upstreamReq.anthropicVersion === '2023-06-01',
+  upstreamReq
+)
+await sleep(200)
+log = lastLog('smoke-gw-req-a1')
+check('记账：输入含缓存 23 / 输出 9', log?.input_tokens === 23 && log.output_tokens === 9, log)
+
+res = await anthropic({ model: 'smoke-gw-native', max_tokens: 64, stream: true, messages: [{ role: 'user', content: '你好' }] }, { 'X-Request-Id': 'smoke-gw-req-a2', 'anthropic-version': '2024-01-01' })
+events = await readEvents(res)
+upstreamReq = await mockLast()
+check('流式原样透传 Anthropic 事件', events.filter((e) => e.type === 'content_block_delta').map((e) => e.delta.text).join('') === 'Anthropic 回答', events)
+check('透传客户端的 anthropic-version', upstreamReq.anthropicVersion === '2024-01-01', upstreamReq)
+await sleep(200)
+log = lastLog('smoke-gw-req-a2')
+check('流式记账：23 / 9', log?.input_tokens === 23 && log.output_tokens === 9, log)
+
+res = await anthropic({ model: 'smoke-gw-chat', max_tokens: 64, messages: [{ role: 'user', content: 'hi' }] })
+json = await res.json()
+check(
+  '上游没填 Anthropic 地址时 400，错误是 Anthropic 格式',
+  res.status === 400 && json.type === 'error' && json.error?.type === 'invalid_request_error' && json.error.message.includes('/v1/chat/completions'),
+  json
+)
+
+res = await fetch(BASE + '/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': 'sk-wrong' }, body: '{}' })
+json = await res.json()
+check('令牌不对 401，Anthropic 格式', res.status === 401 && json.error?.type === 'authentication_error', json)
 
 // ---------------------------------------------------------------------------
 console.log('\n上游出错')

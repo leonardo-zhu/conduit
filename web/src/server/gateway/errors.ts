@@ -45,8 +45,25 @@ export function errorBody(error: GatewayError) {
   return { error: { type: error.type, code: error.code, message: error.message } }
 }
 
-export function errorResponse(error: GatewayError, requestId: string): Response {
-  return Response.json(errorBody(error), {
+/**
+ * /v1/messages 的调用方是 Anthropic 客户端，错误按 Anthropic 的格式返回：
+ * { type: 'error', error: { type, message } }，状态码不变
+ */
+const ANTHROPIC_TYPE: Record<GatewayErrorType, string> = {
+  authentication_error: 'authentication_error',
+  invalid_request_error: 'invalid_request_error',
+  insufficient_quota: 'rate_limit_error',
+  upstream_unavailable: 'overloaded_error',
+  upstream_error: 'api_error',
+  upstream_timeout: 'timeout_error',
+}
+
+export function anthropicErrorBody(error: GatewayError) {
+  return { type: 'error', error: { type: ANTHROPIC_TYPE[error.type], message: error.message } }
+}
+
+export function errorResponse(error: GatewayError, requestId: string, format: 'openai' | 'anthropic' = 'openai'): Response {
+  return Response.json(format === 'anthropic' ? anthropicErrorBody(error) : errorBody(error), {
     status: error.status,
     headers: { 'X-Request-Id': requestId },
   })
