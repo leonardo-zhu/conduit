@@ -23,7 +23,8 @@ import { formatQuotaWithCurrency, getCurrencyDisplay } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
-// Conduit: 应用的 quota 是总额度（0 不限），剩余 = 总额度 - 当前周期已用
+// Conduit: 显示“当前周期已用 / 额度”（0 不限），有上限时带进度条。
+// 按月重置的应用，已用是本月的；不重置的是累计
 type UserQuotaCellProps = {
   total: number
   used: number
@@ -37,21 +38,24 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
   const unlimited = props.total === 0
-  const remaining = props.total - props.used
-  const formattedRemaining = unlimited
-    ? t('Unlimited')
-    : formatQuotaWithCurrency(remaining, { showSymbol: false })
-  const formattedUsed = formatQuotaWithCurrency(props.used, {
-    showSymbol: false,
-  })
+  const ratio = unlimited ? 0 : Math.min(props.used / props.total, 1)
+  const format = (value: number) =>
+    formatQuotaWithCurrency(value, { showSymbol: false })
+  const formattedUsed = format(props.used)
+  const formattedTotal = unlimited ? t('Unlimited') : format(props.total)
+  const periodLabel =
+    props.period === 'month' ? t('Used this month') : t('Used in total')
 
   return (
     <QuotaDetailsPopover
-      title={`${t('Quota')} (${quotaUnit})`}
-      triggerLabel={`${t('Available Balance')} ${formattedRemaining}; ${t('Used amount')} ${formattedUsed}`}
+      title={`${t('Usage / Quota')} (${quotaUnit})`}
+      triggerLabel={`${periodLabel} ${formattedUsed} / ${formattedTotal}`}
       details={[
-        { label: t('Available Balance'), value: formattedRemaining },
-        { label: t('Total Used'), value: formattedUsed },
+        { label: periodLabel, value: formattedUsed },
+        { label: t('Quota'), value: formattedTotal },
+        ...(unlimited
+          ? []
+          : [{ label: t('Remaining'), value: format(Math.max(props.total - props.used, 0)) }]),
         {
           label: t('Quota period'),
           value:
@@ -62,16 +66,31 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
       ]}
     >
       <span className='grid min-w-0 grid-cols-1 gap-y-1 text-sm tabular-nums'>
-        <span className={cn(!unlimited && remaining <= 0 && 'text-destructive')}>
-          {formattedRemaining}
+        <span>
+          {formattedUsed}
+          <span className='text-muted-foreground'> / {formattedTotal}</span>
         </span>
-        <span
-          data-table-text='secondary'
-          className='text-muted-foreground flex items-baseline gap-1 text-xs font-normal'
-        >
-          <span>{t('Used amount')}</span>
-          <span>{formattedUsed}</span>
-        </span>
+        {unlimited ? (
+          <span
+            data-table-text='secondary'
+            className='text-muted-foreground text-xs font-normal'
+          >
+            {periodLabel}
+          </span>
+        ) : (
+          <span
+            className='bg-muted h-1.5 w-full overflow-hidden rounded-full'
+            aria-hidden
+          >
+            <span
+              className={cn(
+                'block h-full rounded-full',
+                ratio >= 1 ? 'bg-destructive' : ratio >= 0.8 ? 'bg-warning' : 'bg-primary'
+              )}
+              style={{ width: `${ratio * 100}%` }}
+            />
+          </span>
+        )}
       </span>
     </QuotaDetailsPopover>
   )

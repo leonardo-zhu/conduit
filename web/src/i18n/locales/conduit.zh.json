@@ -146,5 +146,8 @@
   "Licensed under AGPL-3.0-or-later. Source code:": "以 AGPL-3.0-or-later 许可发布。源码：",
   "Provider ID": "标识",
   "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.": "应用可以不配别名，直接用“标识/模型名”调用，如 minimax/MiniMax-M2。改了标识，用旧写法的应用会调不通。",
-  "Follow system": "跟随系统"
+  "Follow system": "跟随系统",
+  "Usage / Quota": "用量 / 额度",
+  "Used this month": "本月已用",
+  "Used in total": "累计已用"
 }
