@@ -113,6 +113,8 @@ export interface ToolSurchargeItem {
 }
 
 export interface LogOtherData {
+  /** Conduit: 上游没返回 usage，按字符数估算 */
+  estimated?: boolean
   admin_info?: {
     is_multi_key?: boolean
     multi_key_index?: number

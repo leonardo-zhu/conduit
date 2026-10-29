@@ -104,5 +104,7 @@
   "User Analytics": "App Analytics",
   "Top Users": "Top Apps",
   "User Consumption Ranking": "App Consumption Ranking",
-  "User Consumption Trend": "App Consumption Trend"
+  "User Consumption Trend": "App Consumption Trend",
+  "Estimated": "Estimated",
+  "The upstream returned no usage; tokens are estimated from text length": "The upstream returned no usage; tokens are estimated from text length"
 }

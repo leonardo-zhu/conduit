@@ -34,8 +34,14 @@ interface UsageRow {
 /** NewAPI 的日志类型：2 消耗，5 错误 */
 const LOG_TYPE = { CONSUME: 2, ERROR: 5 } as const
 
+/**
+ * 扣了额度的记录都算消耗：包括调用方中途断开、按估算扣的那些（error 不为空但有 token）。
+ * 只有没扣额度的才算错误，看板和日志统计都按这个口径，和实际扣减对得上
+ */
+const CHARGED = "(error = '' OR input_tokens + output_tokens > 0)"
+
 function toLog(row: UsageRow) {
-  const failed = row.error !== ''
+  const failed = row.error !== '' && row.input_tokens + row.output_tokens === 0
   return {
     id: row.id,
     user_id: row.app_id ?? 0,
@@ -83,8 +89,8 @@ function logFilter(query: URLSearchParams) {
   if (start) add('created_at >= ?', start)
   if (end) add('created_at <= ?', end)
   const type = num('type')
-  if (type === LOG_TYPE.CONSUME) add("error = ''")
-  if (type === LOG_TYPE.ERROR) add("error != ''")
+  if (type === LOG_TYPE.CONSUME) add(CHARGED)
+  if (type === LOG_TYPE.ERROR) add(`NOT ${CHARGED}`)
   const upstream = num('channel')
   if (upstream) add('upstream_id = ?', upstream)
   const app = str('username')
@@ -130,7 +136,7 @@ route('GET', '/api/log/stat', ({ query }) => {
 // ---------------------------------------------------------------------------
 
 function rangeFilter(query: URLSearchParams) {
-  const clauses = ["error = ''", 'created_at >= ?', 'created_at <= ?']
+  const clauses = [CHARGED, 'created_at >= ?', 'created_at <= ?']
   const args: (string | number)[] = [
     Number(query.get('start_timestamp') ?? 0),
     Number(query.get('end_timestamp') ?? Number.MAX_SAFE_INTEGER),
