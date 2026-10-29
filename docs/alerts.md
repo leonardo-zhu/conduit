@@ -90,15 +90,20 @@
 
 ## Telegram 推送
 
-在服务器的 `.env` 里填这两项（都填了才推）：
+复用 OpenClaw 的默认机器人，跟 OpenClaw 发到同一个私聊。多个程序共用一个机器人发消息不会冲突（冲突的只有接收消息的 getUpdates，Conduit 只发不收）。
 
-```
-CONDUIT_TELEGRAM_BOT_TOKEN=123456:ABC...
-CONDUIT_TELEGRAM_CHAT_ID=123456789
-```
+推送不经过任何大模型，也不经过 OpenClaw：Conduit 直接调 Telegram 的 `sendMessage`。所以就算 OpenClaw 以后接入 Conduit、Conduit 的上游挂了，告警照样能发出来。
 
-- 机器人令牌找 @BotFather 创建机器人时获得。
-- chat id：先给机器人发一条消息，再打开 `https://api.telegram.org/bot<令牌>/getUpdates`，取 `chat.id`。
+**配置读取顺序**（机器人令牌和 chat id 都有才推）：
+
+| 用途 | 先读 | 没有时读 |
+|---|---|---|
+| 机器人令牌 | `CONDUIT_TELEGRAM_BOT_TOKEN` | `TELEGRAM_BOT_TOKEN_DEFAULT` |
+| chat id | `CONDUIT_TELEGRAM_CHAT_ID` | `TELEGRAM_CHAT_ID` |
+
+- **生产（R4S）**：`compose.yaml` 的 `env_file` 先加载 `/opt/stacks/.secrets/global.env`（跟 imap-service 一样），里面有 OpenClaw 默认机器人的 `TELEGRAM_BOT_TOKEN_DEFAULT` 和 `TELEGRAM_CHAT_ID`。Conduit 的 `.env` 不用填，令牌换了只改 `global.env`，再 `docker compose up -d` 让容器重读。
+- **本地测试**：在 `web/.env.local` 里填 `CONDUIT_TELEGRAM_*` 两项。
+- **换别的机器人**：在 Conduit 的 `.env` 里填 `CONDUIT_TELEGRAM_*`，优先级高于 `global.env`。
 
 消息格式：
 
@@ -110,7 +115,7 @@ https://conduit.r4s.leonardo-zhu.me/channels
 
 链接的域名取 `PASSKEY_ORIGIN`，没配就不带链接。
 
-服务器连不上 `api.telegram.org` 时，有两种办法：
+万一服务器连不上 `api.telegram.org`，有两种办法：
 
 - 设 `CONDUIT_TELEGRAM_API` 为一个反代地址，替换 `https://api.telegram.org`；
 - 设 `NODE_USE_ENV_PROXY=1` 加 `HTTPS_PROXY=...`，让 Node 走代理（Node 24 起支持）。
