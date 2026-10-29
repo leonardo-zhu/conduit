@@ -149,5 +149,12 @@
   "Follow system": "跟随系统",
   "Usage / Quota": "用量 / 额度",
   "Used this month": "本月已用",
-  "Used in total": "累计已用"
+  "Used in total": "累计已用",
+  "App Information": "应用信息",
+  "All apps": "全部应用",
+  "No apps": "没有应用",
+  "Filter by app ID": "按应用标识筛选",
+  "No Apps Found": "未找到应用",
+  "No apps yet, or none match your search or filters.": "还没有应用，或没有符合搜索、筛选条件的应用。",
+  "Failed to update the app": "更新应用失败"
 }

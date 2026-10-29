@@ -289,10 +289,10 @@ export function ModelsFilter(props: ModelsFilterProps) {
               <SectionDivider label={t('Admin Only')} />
 
               <div className='grid gap-2'>
-                <Label htmlFor='username'>{t('Username')}</Label>
+                <Label htmlFor='username'>{t('App ID')}</Label>
                 <Input
                   id='username'
-                  placeholder={t('Filter by username')}
+                  placeholder={t('Filter by app ID')}
                   value={filters.username}
                   onChange={(e) => handleChange('username', e.target.value)}
                 />

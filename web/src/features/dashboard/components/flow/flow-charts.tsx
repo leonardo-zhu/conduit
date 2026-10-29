@@ -660,8 +660,8 @@ export function FlowCharts(props: FlowChartsProps) {
                 options={userFilterOptions}
                 selected={selectedUsers}
                 onChange={setSelectedUsers}
-                placeholder={t('All users')}
-                emptyText={t('No users')}
+                placeholder={t('All apps')}
+                emptyText={t('No apps')}
                 maxVisibleChips={2}
                 renderSelectedSummary={(values) =>
                   compactFlowSelectionLabel(values.length)

@@ -93,7 +93,7 @@ export function CommonLogMobileCard<TData>(props: {
       visible: props.cells.has('created_at'),
     },
     user: {
-      label: t('User'),
+      label: t('App'),
       value: log.username,
       visible: props.cells.has('user') && !!log.username,
       sensitive: true,
@@ -386,7 +386,7 @@ export function CommonLogMobileCard<TData>(props: {
                   context.setUserInfoDialogOpen(true)
                 }}
               >
-                {t('User Information')}
+                {t('App Information')}
               </Button>
             )}
           </div>

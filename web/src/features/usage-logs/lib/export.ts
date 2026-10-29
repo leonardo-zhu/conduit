@@ -36,7 +36,7 @@ export function getLogCsvHeader(isAdmin: boolean, t: Translate): string[] {
   return [
     t('Time'),
     t('Type'),
-    ...(isAdmin ? [t('User')] : []),
+    ...(isAdmin ? [t('App')] : []),
     t('Token'),
     t('Group'),
     t('Model'),

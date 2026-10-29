@@ -187,9 +187,9 @@ export function UsersTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
-      emptyTitle={t('No Users Found')}
+      emptyTitle={t('No Apps Found')}
       emptyDescription={t(
-        'No users available. Try adjusting your search or filters.'
+        'No apps yet, or none match your search or filters.'
       )}
       skeletonKeyPrefix='users-skeleton'
       applyHeaderSize
