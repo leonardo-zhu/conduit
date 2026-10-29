@@ -22,12 +22,13 @@ import { type ManageUserAction } from '../types'
 // User Action Messages
 // ============================================================================
 
+// Conduit: 用户就是应用
 const ACTION_MESSAGES: Record<ManageUserAction, string> = {
-  enable: 'User enabled successfully',
-  disable: 'User disabled successfully',
+  enable: 'App enabled',
+  disable: 'App disabled',
   promote: 'User promoted to admin successfully',
   demote: 'User demoted to regular user successfully',
-  delete: 'User deleted successfully',
+  delete: 'App deleted',
   add_quota: 'Quota adjusted successfully',
 }
 

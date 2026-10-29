@@ -200,7 +200,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
           <ActivityTimeCell
             createdAt={row.original.created_at ?? 0}
             lastAt={row.original.last_login_at ?? 0}
-            lastLabel={t('Last Login')}
+            lastLabel={t('Last request')}
             format='absolute'
           />
         ),

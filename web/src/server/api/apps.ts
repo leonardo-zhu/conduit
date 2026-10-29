@@ -27,7 +27,11 @@ export interface AppRow {
   request_count: number
   remark: string
   created_at: number
+  /** 查询时附带：名下令牌最近一次使用的时间 */
+  last_used_at?: number | null
 }
+
+const SELECT_APP = `SELECT apps.*, (SELECT MAX(last_used_at) FROM tokens WHERE tokens.app_id = apps.id) AS last_used_at FROM apps`
 
 export const APP_STATUS = { ENABLED: 1, DISABLED: 2 } as const
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
@@ -60,12 +64,13 @@ function toUser(app: AppRow) {
     request_count: app.request_count,
     remark: app.remark,
     created_at: app.created_at,
-    last_login_at: 0,
+    // 前端沿用 NewAPI 的“最后登录”字段，Conduit 里显示为“最近请求”
+    last_login_at: app.last_used_at ?? 0,
   }
 }
 
 export function getApp(id: number): AppRow | undefined {
-  return db().prepare('SELECT * FROM apps WHERE id = ?').get(id) as AppRow | undefined
+  return db().prepare(`${SELECT_APP} WHERE apps.id = ?`).get(id) as AppRow | undefined
 }
 
 function listApps(query: URLSearchParams) {
@@ -76,7 +81,7 @@ function listApps(query: URLSearchParams) {
   const args = keyword ? [`%${keyword}%`, `%${keyword}%`] : []
   const { total } = db().prepare(`SELECT COUNT(*) AS total FROM apps ${where}`).get(...args) as { total: number }
   const rows = db()
-    .prepare(`SELECT * FROM apps ${where} ORDER BY id LIMIT ? OFFSET ?`)
+    .prepare(`${SELECT_APP} ${where} ORDER BY id LIMIT ? OFFSET ?`)
     .all(...args, size, offset) as unknown as AppRow[]
   return ok({ items: rows.map(toUser), total, page, page_size: size })
 }
