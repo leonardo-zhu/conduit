@@ -106,4 +106,5 @@ export type ApiKeysDialogType =
   | 'create'
   | 'update'
   | 'delete'
+  | 'regenerate'
   | 'batch-delete'

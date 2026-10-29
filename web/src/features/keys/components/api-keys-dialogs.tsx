@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
+import { ApiKeysRegenerateDialog } from './api-keys-regenerate-dialog'
+import { TokenKeyDialog } from './token-key-dialog'
 
 export function ApiKeysDialogs() {
   const { open, setOpen, currentRow } = useApiKeys()
@@ -31,6 +33,8 @@ export function ApiKeysDialogs() {
         currentRow={open === 'update' ? currentRow || undefined : undefined}
       />
       <ApiKeysDeleteDialog />
+      <ApiKeysRegenerateDialog />
+      <TokenKeyDialog />
     </>
   )
 }

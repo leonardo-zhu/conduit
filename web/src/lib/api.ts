@@ -48,12 +48,15 @@ export async function getSelf() {
   return res.data
 }
 
-export async function getUserModels(): Promise<{
+// Conduit: 传 appId 时只返回该应用的别名
+export async function getUserModels(appId?: number): Promise<{
   success: boolean
   message?: string
   data?: string[]
 }> {
-  const res = await api.get('/api/user/models')
+  const res = await api.get('/api/user/models', {
+    params: appId ? { app_id: appId } : undefined,
+  })
   return res.data
 }
 

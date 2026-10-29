@@ -16,15 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
+import React, { useState, useCallback } from 'react'
 
 import useDialogState from '@/hooks/use-dialog'
-import { handleServerError } from '@/lib/handle-server-error'
 
-import { fetchTokenKey, fetchTokenKeysBatch } from '../api'
-import { ERROR_MESSAGES } from '../constants'
 import type { ApiKey, ApiKeysDialogType } from '../types'
+
+/**
+ * Conduit: 服务端只存令牌哈希，明文只在创建和重新生成时返回一次，
+ * 所以去掉了 NewAPI 的“查看 / 复制完整密钥”，改为 revealed：刚拿到的明文，弹窗显示一次。
+ */
+export type RevealedKey = { name: string; key: string }
 
 type ApiKeysContextType = {
   open: ApiKeysDialogType | null
@@ -33,126 +35,21 @@ type ApiKeysContextType = {
   setCurrentRow: React.Dispatch<React.SetStateAction<ApiKey | null>>
   refreshTrigger: number
   triggerRefresh: () => void
-  resolvedKey: string
-  setResolvedKey: React.Dispatch<React.SetStateAction<string>>
-  resolveRealKey: (id: number) => Promise<string | null>
-  resolveRealKeysBatch: (ids: number[]) => Promise<Record<number, string>>
-  resolvedKeys: Record<number, string>
-  loadingKeys: Record<number, boolean>
-  copiedKeyId: number | null
-  markKeyCopied: (id: number) => void
+  revealed: RevealedKey | null
+  setRevealed: (value: RevealedKey | null) => void
 }
 
 const ApiKeysContext = React.createContext<ApiKeysContextType | null>(null)
 
 export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
-  const { t } = useTranslation()
   const [open, setOpen] = useDialogState<ApiKeysDialogType>(null)
   const [currentRow, setCurrentRow] = useState<ApiKey | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
-  const [resolvedKey, setResolvedKey] = useState('')
-
-  const [resolvedKeys, setResolvedKeys] = useState<Record<number, string>>({})
-  const [loadingKeys, setLoadingKeys] = useState<Record<number, boolean>>({})
-  const pendingRequests = useRef<Record<number, Promise<string | null>>>({})
-
-  const [copiedKeyId, setCopiedKeyId] = useState<number | null>(null)
-  const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-
-  useEffect(() => {
-    return () => clearTimeout(copiedTimerRef.current)
-  }, [])
-
-  const markKeyCopied = useCallback((id: number) => {
-    setCopiedKeyId(id)
-    clearTimeout(copiedTimerRef.current)
-    copiedTimerRef.current = setTimeout(() => setCopiedKeyId(null), 2000)
-  }, [])
+  const [revealed, setRevealed] = useState<RevealedKey | null>(null)
 
   const triggerRefresh = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1)
   }, [])
-
-  const resolveRealKey = useCallback(
-    async (id: number): Promise<string | null> => {
-      if (resolvedKeys[id]) return resolvedKeys[id]
-      if (id in pendingRequests.current) return pendingRequests.current[id]
-
-      const request = (async () => {
-        setLoadingKeys((prev) => ({ ...prev, [id]: true }))
-        try {
-          const res = await fetchTokenKey(id)
-          if (res.success && res.data?.key) {
-            const fullKey = `sk-${res.data.key}`
-            setResolvedKeys((prev) => ({ ...prev, [id]: fullKey }))
-            return fullKey
-          }
-          handleServerError(res, t(ERROR_MESSAGES.UNEXPECTED))
-          return null
-        } catch (error) {
-          handleServerError(error, t(ERROR_MESSAGES.UNEXPECTED))
-          return null
-        } finally {
-          delete pendingRequests.current[id]
-          setLoadingKeys((prev) => {
-            const next = { ...prev }
-            delete next[id]
-            return next
-          })
-        }
-      })()
-
-      pendingRequests.current[id] = request
-      return request
-    },
-    [resolvedKeys, t]
-  )
-
-  const resolveRealKeysBatch = useCallback(
-    async (ids: number[]): Promise<Record<number, string>> => {
-      const uncachedIds = ids.filter((id) => !resolvedKeys[id])
-      if (uncachedIds.length === 0) {
-        const result: Record<number, string> = {}
-        for (const id of ids) result[id] = resolvedKeys[id]
-        return result
-      }
-
-      for (const id of uncachedIds) {
-        setLoadingKeys((prev) => ({ ...prev, [id]: true }))
-      }
-
-      try {
-        const res = await fetchTokenKeysBatch(uncachedIds)
-        if (res.success && res.data?.keys) {
-          const newKeys: Record<number, string> = {}
-          for (const [idStr, key] of Object.entries(res.data.keys)) {
-            newKeys[Number(idStr)] = `sk-${key}`
-          }
-          setResolvedKeys((prev) => ({ ...prev, ...newKeys }))
-
-          const result: Record<number, string> = { ...newKeys }
-          for (const id of ids) {
-            if (resolvedKeys[id]) result[id] = resolvedKeys[id]
-          }
-          return result
-        }
-        handleServerError(res, t(ERROR_MESSAGES.UNEXPECTED))
-        return {}
-      } catch (error) {
-        handleServerError(error, t(ERROR_MESSAGES.UNEXPECTED))
-        return {}
-      } finally {
-        for (const id of uncachedIds) {
-          setLoadingKeys((prev) => {
-            const next = { ...prev }
-            delete next[id]
-            return next
-          })
-        }
-      }
-    },
-    [resolvedKeys, t]
-  )
 
   return (
     <ApiKeysContext
@@ -163,14 +60,8 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
         setCurrentRow,
         refreshTrigger,
         triggerRefresh,
-        resolvedKey,
-        setResolvedKey,
-        resolveRealKey,
-        resolveRealKeysBatch,
-        resolvedKeys,
-        loadingKeys,
-        copiedKeyId,
-        markKeyCopied,
+        revealed,
+        setRevealed,
       }}
     >
       {children}
