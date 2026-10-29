@@ -3,8 +3,10 @@
  *
  * 单进程，一个 SQLite 事务里完成，同一令牌的并发请求不会少扣。
  * 只记请求到达上游之后的结果；鉴权、额度不足等在网关就被拒绝的请求不记。
+ * 记完再做异常检测（alerts.ts），有问题记事件。
  */
 import { db, nowSeconds, transaction } from '../db'
+import { checkAfterRequest } from './alerts'
 import type { GatewayAuth, RouteTarget } from './context'
 
 export interface UsageEntry {
@@ -62,6 +64,7 @@ export function recordUsage(entry: UsageEntry) {
       .prepare('UPDATE apps SET used = used + ?, request_count = request_count + ? WHERE id = ?')
       .run(charge, entry.error ? 0 : 1, entry.auth.app.id)
   })
+  checkAfterRequest({ auth: entry.auth, target: entry.target, statusCode: entry.statusCode, error: entry.error, charge })
 }
 
 /**

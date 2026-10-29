@@ -103,6 +103,24 @@ const MIGRATIONS = [
   // 上游的协议：responses 原生支持 Responses API，直接透传；chat 只支持 Chat Completions，由网关转换
   `ALTER TABLE upstreams ADD COLUMN protocol TEXT NOT NULL DEFAULT 'chat';
   UPDATE upstreams SET protocol = 'responses' WHERE type = 45;`,
+  // 顶栏铃铛的事件：上游异常、额度告急、错误率突增。同一类型同一对象的事件合并计数，见 events.ts
+  `CREATE TABLE events (
+    id            INTEGER PRIMARY KEY,
+    kind          TEXT NOT NULL,           -- 事件类型，见 events.ts 的 EventKind
+    level         TEXT NOT NULL,           -- warning / error
+    subject_type  TEXT NOT NULL,           -- upstream / app / token
+    subject_id    INTEGER NOT NULL,
+    subject_name  TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    detail        TEXT NOT NULL DEFAULT '',
+    link          TEXT NOT NULL DEFAULT '', -- 后台里查看详情的页面路径
+    count         INTEGER NOT NULL DEFAULT 1,
+    first_at      INTEGER NOT NULL,
+    last_at       INTEGER NOT NULL,
+    read_at       INTEGER NOT NULL DEFAULT 0  -- 0 未读
+  );
+  CREATE INDEX events_subject ON events(kind, subject_type, subject_id, last_at);
+  CREATE INDEX events_last ON events(last_at);`,
 ]
 
 function open(): DatabaseSync {
