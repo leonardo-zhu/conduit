@@ -1,20 +1,6 @@
-# 追加到 /opt/stacks/caddy/Caddyfile。
-# 只反代 NewAPI 和首页；adapter 的其余路由只监听 127.0.0.1，不对外。
-# Caddy 遇到 text/event-stream 会自动即时 flush，流式响应不需要额外配置。
+# 追加到 /opt/stacks/caddy/Caddyfile（替换原来 conduit.r4s… 那一段）。
+# web 只监听 127.0.0.1:3012。Caddy 遇到 text/event-stream 会自动即时 flush，流式响应不需要额外配置。
 
 conduit.r4s.leonardo-zhu.me {
-	# 自定义首页（NewAPI「首页内容」里填 https://conduit.r4s.leonardo-zhu.me/_home/）
-	handle /_home* {
-		reverse_proxy 127.0.0.1:3011
-	}
-	handle {
-		reverse_proxy 127.0.0.1:3010
-	}
-}
-
-# 自建的管理后台 + 网关（compose 里的 web 服务，只监听 127.0.0.1:3012）。
-# 并行验证期间用单独的域名；切换时把上面 conduit.r4s… 的 reverse_proxy 改到 3012，再删掉这一段。
-# 注意：Passkey 绑定域名，在这个临时域名上注册的 Passkey 切换后要重新注册。
-conduit-next.r4s.leonardo-zhu.me {
 	reverse_proxy 127.0.0.1:3012
 }

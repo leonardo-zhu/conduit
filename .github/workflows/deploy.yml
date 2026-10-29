@@ -14,7 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/conduit-adapter
   WEB_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/conduit-web
 
 jobs:
@@ -37,17 +36,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push adapter image
-        uses: docker/build-push-action@v6
-        with:
-          context: adapter
-          push: true
-          platforms: linux/arm64
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-      # 自建的管理后台 + 网关（web/）。服务器上是否运行由 COMPOSE_PROFILES 决定，见 compose.yaml
       - name: Build and push web image
         uses: docker/build-push-action@v6
         with:
@@ -97,9 +85,7 @@ jobs:
           # Login to GHCR on host
           retry sh -c 'echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin'
 
-          # 固定到本次构建的镜像；new-api 的版本由 compose.yaml 决定。
-          # web 服务只在服务器 .env 里设了 COMPOSE_PROFILES=web 时才会被拉取和启动
-          export ADAPTER_TAG="${{ github.sha }}"
+          # 固定到本次构建的镜像。--remove-orphans 会顺带删掉已从 compose 移除的旧容器（new-api、adapter）
           export WEB_TAG="${{ github.sha }}"
           retry docker compose pull
           docker compose up -d --remove-orphans
