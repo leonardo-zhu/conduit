@@ -1,20 +1,40 @@
 # 自建网关进度记录
 
-最后更新：2026-10-29（已上线，NewAPI 和 adapter 已下线）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-30（上线后的第一轮修改；上游接口和 Anthropic 支持在 PR leonardo-zhu/conduit#4，等合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
-## 当前状态（2026-10-29 上线后）
+## 当前状态（2026-10-30）
 
 - **2026-10-29 已上线**：PR leonardo-zhu/conduit#2 合并到 master 后由 CI 部署。R4S 上跑的是 `conduit-web`（127.0.0.1:3012，内存约 44MB / 上限 256MB），`conduit-new-api` 和 `conduit-adapter` 已删除；Caddy 的 `conduit.r4s…` 改为直接指向 3012（服务器上备份 `Caddyfile.bak-2026-10-29`，`~/HomeLab/r4s/backups/` 里有改前改后两份）。外网登录页 200、`/v1/models` 无令牌 401。新库是空的，用户登录后自己配上游、应用、别名、令牌再测试。
 - 服务器 `/opt/stacks/conduit/.env`：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD_HASH`（用户本机生成后经 ssh 直接追加）、`CONDUIT_MASTER_KEY`（在服务器上 openssl 生成，丢了要重填所有上游密钥）、`PASSKEY_ORIGIN`、`CONDUIT_TELEGRAM_CHAT_ID`；`SESSION_SECRET`、`CRYPTO_SECRET` 是 NewAPI 留下的，后者确认不回退后可删。改前备份 `.env.bak-2026-10-29-prelaunch`。旧数据还在 `/opt/conduit/new-api/`。
-- 提交历史在上线后重写过（2026-10-29，用户确认后由用户本人强推）：bot 作者的 70 个提交都加了 `Co-authored-by: Leonardo Zhu <leonardo-zhu@qq.com>`，让它们计入用户的 GitHub contribution；代码、作者和日期不变，所有 SHA 都变了（本文件里的 SHA 已换成新的）。git-identity skill 也已要求以后每个提交都带这一行。
+- 提交历史在上线后重写过两次（2026-10-29 / 30，用户确认后由用户本人强推）：bot 作者的 70 个提交加了 `Co-authored-by: Leonardo Zhu <leonardo-zhu@qq.com>`（计入用户的 GitHub contribution）；所有中文提交说明改成英文 Conventional Commits。代码、作者和日期不变，SHA 都变了（本文件里的 SHA 是重写后的）。
+- **提交约定**（git-identity 2.2，agent-skills PR #24 已合并）：提交说明一律英文 Conventional Commits，末尾依次是 bot、用户、Claude 三行署名。改动走分支 + PR，用户 review 合并后自动部署。git-identity 等 skill **不能直接改 `~/.claude/skills/`**，要在 `~/Agent/Skills` 仓库改、开 PR。
+- PR leonardo-zhu/conduit#3 已合并部署：Passkey 弹窗和全站输入框关掉浏览器自动填充（上游密钥改成文本框加遮盖）；去掉上游的“类型”和所有按服务商的默认值；README 补全功能和提交约定。
 - 最近一轮修 bug 的提交（`dc03dad`..`407e719`）：令牌抽屉死循环、删除二次验证残留、复制上游去掉重置余额、错误页去掉 NewAPI 反馈按钮、概览余额改为各应用汇总、看板“分流”去掉节点和分组层并把“用户”改称“应用”、日志显示“估算”且中途断开的请求算作消耗、应用页“最后登录”改“最近请求”、顶栏去掉通知和“主页”“控制台”、去掉主题设置面板（跟随系统深浅色）。
 - 顶栏铃铛已恢复，改为**网关事件提醒**（`3b4fab7`..`c2bcd5e`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
 - 被删的界面功能用户确认都不恢复（2026-10-29）：顶栏“主页”“控制台”、错误页反馈按钮、分流图的节点和分组层、复制上游的“重置余额”、“最后登录”、搜索面板的深浅色切换、主题偏好。顶部导航和没用到的公开页布局代码已删（`658c01e`）。语言切换保留。
 
+### 进行中：PR leonardo-zhu/conduit#4（分支 `feat/upstream-endpoints`，3 个提交，等用户 review 合并）
+
+上游不区分服务商，按协议配地址，应用自己选调哪个入口：
+
+- **OpenAI 兼容地址**（必填）：Chat Completions 始终提供；Responses API 用开关决定是否提供（默认关），打开后选原生支持（默认）或网关转换
+- **Anthropic 兼容地址**（选填）：填了就提供 `/v1/messages`，直接转发到 `<地址>/v1/messages`，**永远不和 OpenAI 格式互转**（用户定的）
+- 网关：`/v1/responses` 在上游不提供时返回 400 `responses_not_supported`；新增 `/v1/messages`（应用令牌认 Bearer 或 `x-api-key`，转发时带 `x-api-key` + Bearer 和客户端的 `anthropic-version` / `anthropic-beta`，按 Anthropic 用量记账、缓存 token 算输入，错误用 Anthropic 格式）
+- 迁移 5 加 `responses_mode`（已有上游按旧 `protocol` 映射：responses → native，chat → convert），迁移 6 加 `anthropic_base_url`（空）。部署后线上行为不变
+- 本地验证：类型检查、`api-smoke`、`gateway-smoke`（含新加的 Anthropic 检查）都通过，抽屉三种状态在浏览器里试过。**还没用真实的 Anthropic 上游测过**
+
 ### 下次先做
 
-1. 用户在线上测试（配真实上游、应用、令牌，切 Vita），按用户指出的具体问题修 bug，**不要逐页巡检**。
-2. 对照上游控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
+1. 用户合并 PR #4 后确认部署成功（CI 跑完、`docker compose ps`、登录页 200）。
+2. 用真实上游测：OpenAI 兼容地址下 Responses 原生 / 转换两种；Anthropic 兼容地址（如 MiniMax `https://api.minimaxi.com/anthropic`、方舟 Coding Plan `…/api/coding`）用 Claude Code 试一次（`ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。
+3. 用户在线上测试、切 Vita，按用户指出的具体问题修 bug，**不要逐页巡检**。
+4. 对照上游控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
+
+### 其他待处理
+
+- **agent-skills 的 Deploy Skills 工作流一直失败**：部署目标是已经撤掉的 do-sg（`DEPLOY_SSH_HOST` 解析不了）。合并 skill 的 PR 后要在本机手动 `TARGET_HOME=$HOME ~/Agent/Skills/install.sh`；R4S 上 OpenClaw 的 skill 目前没人更新。要不要把工作流改成部署到 R4S，等用户定。
+- 本机 `web/.env.local` 里复制了一份 OpenClaw 默认机器人的令牌做测试（用户同意的），推送目标是 Daily Briefing 频道。
+- `git stash` 里留着一条已被 PR #4 取代的提示文字修改（`stash@{0}`），可以删。
 
 ## 已完成
 
@@ -123,8 +143,7 @@
 
 ### 阶段 4–5
 
-- 按 `docs/setup.md` 在 R4S 上启用 web（需要你在服务器上建 web.env、数据目录、改 Caddy，并把分支合并到 master），在 R4S 上实测内存。
-- 并行验证、切换 Vita、下线 NewAPI、更新 `docs/setup.md` 和 `docs/apps.md`。
+- 切换 Vita 到 Conduit，并对账（见上“下次先做”）。
 
 ## 本地开发
 
