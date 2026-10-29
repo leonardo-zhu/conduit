@@ -106,5 +106,9 @@
   "User Consumption Ranking": "App Consumption Ranking",
   "User Consumption Trend": "App Consumption Trend",
   "Estimated": "Estimated",
-  "The upstream returned no usage; tokens are estimated from text length": "The upstream returned no usage; tokens are estimated from text length"
+  "The upstream returned no usage; tokens are estimated from text length": "The upstream returned no usage; tokens are estimated from text length",
+  "App enabled": "App enabled",
+  "App disabled": "App disabled",
+  "App deleted": "App deleted",
+  "Last request": "Last request"
 }
