@@ -160,5 +160,8 @@
   "Key name": "Key name",
   "No enabled providers to test": "No enabled providers to test",
   "All {{count}} providers passed": "All {{count}} providers passed",
-  "{{failed}} of {{count}} providers failed": "{{failed}} of {{count}} providers failed"
+  "{{failed}} of {{count}} providers failed": "{{failed}} of {{count}} providers failed",
+  "7 days": "7 days",
+  "1 hour": "1 hour",
+  "1 day": "1 day"
 }
