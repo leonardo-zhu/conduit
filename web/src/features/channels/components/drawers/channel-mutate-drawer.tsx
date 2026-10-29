@@ -45,6 +45,7 @@ import {
 } from '@/components/drawer-layout'
 import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -55,6 +56,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   NativeSelect,
   NativeSelectOption,
@@ -77,17 +79,20 @@ import { CHANNEL_STATUS } from '../../constants'
 import { channelsQueryKeys } from '../../lib'
 import type { Channel } from '../../types'
 
-// Conduit: 上游只有协议、地址、密钥，不区分服务商，也不按服务商给默认值
-const PROTOCOLS = ['responses', 'chat'] as const
-type Protocol = (typeof PROTOCOLS)[number]
+// Conduit: 上游不区分服务商，也不按服务商给默认值。Chat Completions 默认都支持；
+// Responses API 由这里勾选：原生支持，或由网关从 Chat 转换，都不选就是不提供
+type ResponsesMode = NonNullable<Channel['responses_mode']>
+
+function toResponsesMode(native: boolean, convert: boolean): ResponsesMode {
+  if (native) return 'native'
+  return convert ? 'convert' : 'none'
+}
 
 function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
-    // 新建时不预选，必须自己选
-    protocol: z
-      .string()
-      .refine((v) => (PROTOCOLS as readonly string[]).includes(v), t('Please choose a protocol')),
+    responses_native: z.boolean(),
+    responses_convert: z.boolean(),
     base_url: z.string().trim().min(1, t('Please enter the base URL')),
     // 编辑时留空表示不改密钥
     key: isUpdate
@@ -104,7 +109,9 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 
 const EMPTY_VALUES: FormValues = {
   name: '',
-  protocol: '',
+  // 新建默认只有 Chat Completions
+  responses_native: false,
+  responses_convert: false,
   base_url: '',
   key: '',
   models: [],
@@ -116,7 +123,8 @@ const EMPTY_VALUES: FormValues = {
 function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
-    protocol: channel.protocol ?? '',
+    responses_native: channel.responses_mode === 'native',
+    responses_convert: channel.responses_mode === 'convert',
     base_url: channel.base_url ?? '',
     key: '',
     models: channel.models.split(',').filter(Boolean),
@@ -129,7 +137,7 @@ function toFormValues(channel: Channel): FormValues {
 function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
-    protocol: values.protocol as Protocol,
+    responses_mode: toResponsesMode(values.responses_native, values.responses_convert),
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
     test_model: values.test_model || null,
@@ -170,6 +178,8 @@ export function ChannelMutateDrawer({
   }, [open, currentRow, form])
 
   const models = form.watch('models')
+  const responsesNative = form.watch('responses_native')
+  const responsesMode = toResponsesMode(responsesNative, form.watch('responses_convert'))
   const [isFetchingModels, setIsFetchingModels] = useState(false)
 
   // 从上游的 GET /models 拉取，并入已填的模型（只有保存过的上游才有密钥可用）
@@ -256,38 +266,78 @@ export function ChannelMutateDrawer({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name='protocol'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Protocol')}</FormLabel>
-                    <FormControl>
-                      <NativeSelect
-                        className='w-full'
-                        value={field.value}
-                        onChange={(e) => field.onChange(e.target.value)}
-                      >
-                        <NativeSelectOption value='' disabled>
-                          {t('Choose a protocol')}
-                        </NativeSelectOption>
-                        <NativeSelectOption value='responses'>
-                          {t('Responses API (passed through)')}
-                        </NativeSelectOption>
-                        <NativeSelectOption value='chat'>
-                          {t('Chat Completions (converted by the gateway)')}
-                        </NativeSelectOption>
-                      </NativeSelect>
-                    </FormControl>
-                    <FormDescription>
-                      {t(
-                        'Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.'
-                      )}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              <div className='space-y-3'>
+                <Label>{t('Endpoints')}</Label>
+                <div className='flex items-start gap-3'>
+                  <Checkbox checked disabled className='mt-0.5' />
+                  <div className='space-y-0.5'>
+                    <div className='text-sm font-medium'>Chat Completions</div>
+                    <p className='text-muted-foreground text-xs'>
+                      {t('The upstream /chat/completions; every upstream is assumed to support it')}
+                    </p>
+                  </div>
+                </div>
+                <FormField
+                  control={form.control}
+                  name='responses_native'
+                  render={({ field }) => (
+                    <FormItem className='flex items-start gap-3 space-y-0'>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className='mt-0.5'
+                        />
+                      </FormControl>
+                      <div className='space-y-0.5'>
+                        <FormLabel className='text-sm font-medium'>
+                          {t('Responses API (native)')}
+                        </FormLabel>
+                        <FormDescription className='text-xs'>
+                          {t('The upstream has /responses; requests are forwarded as-is')}
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                {!responsesNative && (
+                  <FormField
+                    control={form.control}
+                    name='responses_convert'
+                    render={({ field }) => (
+                      <FormItem className='flex items-start gap-3 space-y-0 pl-7'>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className='mt-0.5'
+                          />
+                        </FormControl>
+                        <div className='space-y-0.5'>
+                          <FormLabel className='text-sm font-medium'>
+                            {t('Convert in the gateway')}
+                          </FormLabel>
+                          <FormDescription className='text-xs'>
+                            {t(
+                              'Offer /v1/responses by converting to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.'
+                            )}
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+                <p className='text-muted-foreground text-xs'>
+                  {t('Apps can call')}: <code>/v1/chat/completions</code>
+                  {responsesMode !== 'none' && (
+                    <>
+                      {', '}
+                      <code>/v1/responses</code>
+                      {responsesMode === 'convert' && ` (${t('converted by the gateway')})`}
+                    </>
+                  )}
+                </p>
+              </div>
               <FormField
                 control={form.control}
                 name='base_url'

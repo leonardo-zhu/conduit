@@ -121,6 +121,10 @@ const MIGRATIONS = [
   );
   CREATE INDEX events_subject ON events(kind, subject_type, subject_id, last_at);
   CREATE INDEX events_last ON events(last_at);`,
+  // 上游提供哪些接口：Chat Completions 默认都有；Responses API 分原生（native）、由网关从 Chat 转换（convert）、
+  // 不提供（none）。取代 protocol 列（保留不用），已有上游按原来的 protocol 迁移，行为不变
+  `ALTER TABLE upstreams ADD COLUMN responses_mode TEXT NOT NULL DEFAULT 'none';
+  UPDATE upstreams SET responses_mode = CASE protocol WHEN 'responses' THEN 'native' ELSE 'convert' END;`,
 ]
 
 function open(): DatabaseSync {

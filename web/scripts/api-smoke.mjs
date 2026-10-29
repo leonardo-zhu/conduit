@@ -76,27 +76,27 @@ console.log('\n上游')
 
 const noKey = await call('POST', '/api/channel', {
   mode: 'single',
-  channel: { name: 'smoke-up', protocol: 'chat', base_url: 'https://example.com/v1' },
+  channel: { name: 'smoke-up', base_url: 'https://example.com/v1' },
 })
 check('没填密钥被拒', !noKey.success, noKey)
 
-const noProtocol = await call('POST', '/api/channel', {
+const badMode = await call('POST', '/api/channel', {
   mode: 'single',
-  channel: { name: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x' },
+  channel: { name: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x', responses_mode: 'chat' },
 })
-check('没选协议被拒', !noProtocol.success, noProtocol)
+check('Responses 方式不合法被拒', !badMode.success, badMode)
 
 const upstream = await call('POST', '/api/channel', {
   mode: 'single',
   channel: {
     name: 'smoke-up',
-    protocol: 'chat',
     base_url: 'https://example.com/v1/',
     key: 'sk-upstream-secret-1234',
     models: 'model-a,model-b',
   },
 })
 check('创建上游', upstream.success && upstream.data.key === '' && upstream.data.key_last4 === '1234', upstream)
+check('新建上游默认不提供 Responses', upstream.data?.responses_mode === 'none', upstream.data?.responses_mode)
 const upstreamId = upstream.data?.id
 check('地址去掉结尾斜杠', upstream.data?.base_url === 'https://example.com/v1', upstream.data?.base_url)
 check('新建时默认启用', upstream.data?.status === 1, upstream.data?.status)

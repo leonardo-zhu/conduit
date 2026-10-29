@@ -79,10 +79,12 @@ try {
 db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
-const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
-const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', protocol: 'responses', base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
-const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
-check('按指定的协议保存', nativeUp.protocol === 'responses', nativeUp.protocol)
+const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
+const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
+const chatOnlyUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chatonly', base_url: MOCK_FOR_GATEWAY, key: 'mock-chatonly-key' } })
+check('按指定的 Responses 方式保存', nativeUp.responses_mode === 'native', nativeUp.responses_mode)
+check('新建上游默认不提供 Responses', chatOnlyUp.responses_mode === 'none', chatOnlyUp.responses_mode)
 
 const app = await admin('POST', '/api/user', { username: 'smoke-gw', quota: 0 })
 const alias = (name, upstream, model) => ({ name, upstream_id: upstream.id, upstream_model: model })
@@ -96,9 +98,10 @@ await admin('PUT', `/api/app/${app.id}/aliases`, {
     alias('smoke-gw-error', chatUp, 'error'),
     alias('smoke-gw-off', offUp, 'normal'),
     alias('smoke-gw-hidden', chatUp, 'normal'),
+    alias('smoke-gw-chatonly', chatOnlyUp, 'normal'),
   ],
 })
-const allModels = 'smoke-gw-chat,smoke-gw-native,smoke-gw-tool,smoke-gw-nousage,smoke-gw-slow,smoke-gw-error,smoke-gw-off'
+const allModels = 'smoke-gw-chat,smoke-gw-native,smoke-gw-tool,smoke-gw-nousage,smoke-gw-slow,smoke-gw-error,smoke-gw-off,smoke-gw-chatonly'
 const token = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-main', unlimited_quota: true, expired_time: -1, model_limits: allModels })
 const key = token.key
 
@@ -116,7 +119,7 @@ res = await gw('/v1/models', key)
 json = await res.json()
 check(
   '模型列表只含白名单里的别名',
-  json.data?.length === 7 && json.data.some((m) => m.id === 'smoke-gw-chat') && !json.data.some((m) => m.id === 'smoke-gw-hidden'),
+  json.data?.length === 8 && json.data.some((m) => m.id === 'smoke-gw-chat') && !json.data.some((m) => m.id === 'smoke-gw-hidden'),
   json
 )
 
@@ -126,6 +129,13 @@ check('白名单外的别名 400 model_not_found', res.status === 400 && json.er
 
 res = await gw('/v1/responses', key, { model: 'smoke-gw-off', input: 'hi' })
 check('上游停用 503', res.status === 503, res.status)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-chatonly', input: 'hi' })
+json = await res.json()
+check('上游不提供 Responses 时 /v1/responses 400', res.status === 400 && json.error?.code === 'responses_not_supported', json)
+
+res = await gw('/v1/chat/completions', key, { model: 'smoke-gw-chatonly', messages: [{ role: 'user', content: 'hi' }] })
+check('同一个上游的 /v1/chat/completions 照常可用', res.status === 200, res.status)
 
 res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi', previous_response_id: 'resp_x' })
 json = await res.json()
@@ -276,7 +286,7 @@ check('应用的请求次数只计成功的请求', app2.request_count > 0, app2
 console.log('\n清理')
 db.exec("DELETE FROM usage_logs WHERE app_slug = 'smoke-gw'")
 await admin('DELETE', `/api/user/${app.id}`)
-await admin('POST', '/api/channel/batch', { ids: [chatUp.id, nativeUp.id, offUp.id] })
+await admin('POST', '/api/channel/batch', { ids: [chatUp.id, nativeUp.id, offUp.id, chatOnlyUp.id] })
 console.log('已删除测试数据')
 
 console.log(failed ? `\n${failed} 项失败` : '\n全部通过')

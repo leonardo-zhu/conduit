@@ -9,7 +9,7 @@ Conduit 给多个应用共用，Vita 只是第一个接入方。
 | 应用 | 一个客户端或服务，如 `vita`、`svc-notes`。有总额度（可按月重置），名下的令牌共享 |
 | 令牌 | 一台设备或一个服务实例一个，如 `vita-leonardo-iphone`。可以单独设额度、过期时间、模型白名单、IP 白名单 |
 | 别名 | 应用调用的模型名，如 `vita-chat`，在应用里配置指向哪个上游的哪个模型。换模型只改别名，应用不用改 |
-| 上游 | 模型服务商的一个接入点（地址 + 密钥）。协议选 Responses（直接透传）或 Chat（网关转换） |
+| 上游 | 模型服务商的一个接入点（地址 + 密钥）。都提供 Chat Completions；Responses API 可设为原生支持（直接转发）、网关转换或不提供。后台上游列表显示每个上游可用的接口 |
 
 ## 接入一个新应用
 
@@ -24,7 +24,8 @@ Conduit 给多个应用共用，Vita 只是第一个接入方。
 
 ## 调用约定
 
-- 地址：`https://conduit.r4s.leonardo-zhu.me/v1/responses`（也支持 `/v1/chat/completions`；`/v1/models` 列出令牌可用的别名）
+- 地址：`https://conduit.r4s.leonardo-zhu.me/v1/chat/completions` 或 `/v1/responses`，应用自己选；`/v1/models` 列出令牌可用的别名
+- `/v1/responses` 要求别名指向的上游提供 Responses API（原生或网关转换），不提供时返回 400 `responses_not_supported`，改用 `/v1/chat/completions`
 - `Authorization: Bearer <令牌>`
 - `model` 填别名
 - 无状态：不支持 `previous_response_id`，每次请求都要带完整上下文

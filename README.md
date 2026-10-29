@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **网关**：`/v1/responses`、`/v1/chat/completions`、`/v1/models`。应用只认别名，别名指向某个上游的某个模型；只支持 Chat Completions 的上游由网关做 Responses ↔ Chat 转换，流式照常。
+- **网关**：`/v1/chat/completions`、`/v1/responses`、`/v1/models`，应用自己选调哪个。应用只认别名，别名指向某个上游的某个模型。每个上游都提供 Chat Completions；Responses API 按上游设置：原生支持就直接转发，不支持可以开启网关转换（Chat ↔ Responses，流式照常），也可以不提供。
 - **鉴权和额度**：每台设备或服务实例一个令牌（只存哈希），可设过期时间、模型白名单、IP 白名单、额度；应用有共享的总额度，可按月重置。
 - **记账**：每个请求记一条用量（只记元数据，不记内容）；上游没返回 usage 时按字符数估算并标出来。
 - **管理后台**：账号密码 + Passkey 登录；上游、应用、别名、令牌的管理；使用日志、数据看板。
@@ -20,12 +20,14 @@
                                                           ▼
                                     web :3012（Next.js，本仓库 web/）
                      管理后台 · 令牌 · 额度 · 别名 · 用量 · 协议转换 · SQLite
-                                  │                          │
-                       原生 Responses 的上游           只支持 Chat 的上游
-                          （直接透传）              （网关转换 Responses ↔ Chat）
-                                  │                          │
-                                  ▼                          ▼
-                              火山方舟                 MiniMax / Nous
+                                  │
+                    /v1/chat/completions → 上游的 /chat/completions（直接转发）
+                    /v1/responses        → 上游原生支持：上游的 /responses（直接转发）
+                                           开启网关转换：转成 Chat 发给上游，结果转回来
+                                           都没有：拒绝，提示改用 /v1/chat/completions
+                                  │
+                                  ▼
+                       上游（不区分服务商：地址 + 密钥）
 
 网关发现异常 ──▶ 事件表（后台铃铛） ──新事件──▶ Telegram 频道
 ```
