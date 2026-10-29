@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { LogOut } from 'lucide-react'
-import { useMemo } from 'react'
+import { KeyRound, LogOut } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SignOutDialog } from '@/components/sign-out-dialog'
@@ -30,6 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { PasskeyDialog } from '@/features/auth/passkey/components/passkey-dialog'
 import useDialogState from '@/hooks/use-dialog'
 import { useUserDisplay } from '@/hooks/use-user-display'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
@@ -40,6 +41,7 @@ const avatarFallbackClassName = 'font-semibold text-white'
 export function ProfileDropdown() {
   const { t } = useTranslation()
   const [open, setOpen] = useDialogState()
+  const [passkeyOpen, setPasskeyOpen] = useState(false)
   const user = useAuthStore((state) => state.auth.user)
   const { displayName, roleLabel } = useUserDisplay(user)
   const avatarName = user?.username || displayName
@@ -96,6 +98,12 @@ export function ProfileDropdown() {
 
           <DropdownMenuSeparator />
 
+          {/* Conduit: 管理员的 Passkey 管理 */}
+          <DropdownMenuItem onClick={() => setPasskeyOpen(true)}>
+            <KeyRound className='size-4' />
+            {t('Passkeys')}
+          </DropdownMenuItem>
+
           <DropdownMenuSeparator />
 
           <DropdownMenuItem variant='destructive' onClick={() => setOpen(true)}>
@@ -106,6 +114,7 @@ export function ProfileDropdown() {
       </DropdownMenu>
 
       <SignOutDialog open={!!open} onOpenChange={setOpen} />
+      <PasskeyDialog open={passkeyOpen} onOpenChange={setPasskeyOpen} />
     </>
   )
 }

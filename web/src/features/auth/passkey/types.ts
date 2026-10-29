@@ -22,12 +22,14 @@ export interface ApiResponse<T = unknown> {
   data?: T
 }
 
-export interface PasskeyStatus {
-  enabled: boolean
-  last_used_at?: string | null
-  backup_eligible?: boolean
-  backup_state?: boolean
-  [key: string]: unknown
+// Conduit: 已注册的 Passkey 列表项（原版只有一个 Passkey，用 PasskeyStatus）
+export interface PasskeyItem {
+  id: string
+  name: string
+  device_type: 'singleDevice' | 'multiDevice' | string
+  backed_up: boolean
+  created_at: number
+  last_used_at: number | null
 }
 
 export interface PasskeyOptionsPayload {
