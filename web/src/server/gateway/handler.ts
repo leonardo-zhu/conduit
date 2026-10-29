@@ -1,14 +1,16 @@
 /**
- * 网关数据面：/v1/responses 和 /v1/chat/completions 的处理流程。
+ * 网关数据面：/v1/chat/completions、/v1/responses、/v1/messages 的处理流程。
  *
  *   令牌鉴权 → 别名解析 → 额度检查 → 按上游提供的接口改写请求 → 转发
  *   → 流式：边转发边读用量；非流式：读完整响应（需要时转换格式）
  *   → 记用量、扣额度
  *
- * 应用调哪个入口由应用自己选。上游提供的接口（upstreams.responses_mode）：
- * - /v1/chat/completions：所有上游都直接转发到上游的 /chat/completions
- * - /v1/responses：native 直接转发到上游的 /responses；convert 由网关转成 Chat 再转回来；
- *   none 表示这个上游不提供 Responses API，直接拒绝
+ * 应用调哪个入口由应用自己选。上游提供的接口：
+ * - /v1/chat/completions：所有上游都直接转发到 OpenAI 兼容地址的 /chat/completions
+ * - /v1/responses（upstreams.responses_mode）：native 直接转发到 OpenAI 兼容地址的 /responses；
+ *   convert 由网关转成 Chat 再转回来；none 表示不提供，直接拒绝
+ * - /v1/messages（Anthropic Messages）：上游填了 Anthropic 兼容地址才提供，直接转发到 <地址>/v1/messages，
+ *   不做和 OpenAI 格式的转换；错误按 Anthropic 的格式返回
  */
 import { randomUUID } from 'node:crypto'
 
@@ -21,7 +23,7 @@ import { parseJsonArray } from '../db'
 import { authenticate, checkQuota, resolveAlias, type GatewayAuth, type RouteTarget } from './context'
 import { errorResponse, GatewayError } from './errors'
 import { recordUsage, estimateTokens } from './record'
-import { relayStream, type StreamKind } from './stream'
+import { anthropicInputTokens, relayStream, type StreamKind } from './stream'
 import {
   chatToResponses,
   createChatToResponsesStream,
@@ -30,7 +32,10 @@ import {
   type Body,
 } from './transforms'
 
-export type Endpoint = 'responses' | 'chat'
+export type Endpoint = 'responses' | 'chat' | 'messages'
+
+/** 客户端没带 anthropic-version 时用的版本 */
+const DEFAULT_ANTHROPIC_VERSION = '2023-06-01'
 
 /** 等上游返回响应头的上限（含排队和首包），以及非流式请求的总时长上限 */
 const HEADERS_TIMEOUT_MS = 120_000
@@ -43,21 +48,47 @@ function requestIdOf(req: NextRequest): string {
   return given && /^[\w.:-]{1,128}$/.test(given) ? given : `req_${randomUUID().replaceAll('-', '')}`
 }
 
-/** 按上游协议改写请求，返回目标路径和请求体 */
-function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Body) {
+/** 按入口和上游提供的接口改写请求，返回上游地址、请求头和请求体 */
+function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Body, clientHeaders: Headers) {
+  const { upstream } = target
+  const key = upstreamKey(upstream)
   const withModel: Body = { ...body, model: target.upstreamModel }
+  const openai = (path: string, upstreamBody: Body, convert: boolean) => ({
+    url: `${upstream.base_url}${path}`,
+    headers: { Authorization: `Bearer ${key}` } as Record<string, string>,
+    body: upstreamBody,
+    convert,
+  })
   if (endpoint === 'chat') {
     // 流式时要求上游在末尾返回 usage
     if (withModel.stream === true) {
       withModel.stream_options = { ...(withModel.stream_options as Body | undefined), include_usage: true }
     }
-    return { path: '/chat/completions', body: withModel, convert: false }
+    return openai('/chat/completions', withModel, false)
   }
-  if (target.upstream.responses_mode === 'native') {
-    return { path: '/responses', body: prepareNativeResponses(withModel), convert: false }
+  if (endpoint === 'messages') {
+    if (!upstream.anthropic_base_url) {
+      throw new GatewayError(
+        'invalid_request_error',
+        'messages_not_supported',
+        `模型别名 ${target.alias} 的上游不提供 Anthropic Messages，请改用 /v1/chat/completions`
+      )
+    }
+    // 各家对 Anthropic 接口的鉴权头不统一，x-api-key 和 Bearer 都带上
+    const headers: Record<string, string> = {
+      'x-api-key': key,
+      Authorization: `Bearer ${key}`,
+      'anthropic-version': clientHeaders.get('anthropic-version') ?? DEFAULT_ANTHROPIC_VERSION,
+    }
+    const beta = clientHeaders.get('anthropic-beta')
+    if (beta) headers['anthropic-beta'] = beta
+    return { url: `${upstream.anthropic_base_url}/v1/messages`, headers, body: withModel, convert: false }
   }
-  if (target.upstream.responses_mode === 'convert') {
-    return { path: '/chat/completions', body: prepareChatFromResponses(withModel), convert: true }
+  if (upstream.responses_mode === 'native') {
+    return openai('/responses', prepareNativeResponses(withModel), false)
+  }
+  if (upstream.responses_mode === 'convert') {
+    return openai('/chat/completions', prepareChatFromResponses(withModel), true)
   }
   throw new GatewayError(
     'invalid_request_error',
@@ -68,7 +99,7 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
 
 /** 估算用：请求里的文本长度（去掉 base64 图片） */
 function requestChars(body: Body): number {
-  const text = JSON.stringify([body.instructions ?? '', body.input ?? '', body.messages ?? ''])
+  const text = JSON.stringify([body.instructions ?? '', body.system ?? '', body.input ?? '', body.messages ?? ''])
   return text.replace(/data:[^"]+/g, '').length
 }
 
@@ -83,6 +114,7 @@ function upstreamErrorFor(status: number, text: string): GatewayError {
 
 export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promise<Response> {
   const started = Date.now()
+  const errorFormat = endpoint === 'messages' ? 'anthropic' : 'openai'
   const requestId = requestIdOf(req)
   const ip = clientIp(req)
   let auth: GatewayAuth | undefined
@@ -115,7 +147,7 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
   }
 
   try {
-    auth = authenticate(req.headers.get('authorization'), ip)
+    auth = authenticate(req.headers, ip)
 
     let body: Body
     try {
@@ -138,7 +170,7 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
     target = resolveAlias(auth, body.model)
     checkQuota(auth)
 
-    const upstreamReq = buildUpstreamRequest(endpoint, target, body)
+    const upstreamReq = buildUpstreamRequest(endpoint, target, body, req.headers)
     const upstream = new AbortController()
     // 调用方断开时中止上游（流式的断开由 relayStream 处理，这里管等待响应头和非流式的阶段）
     const onClientAbort = () => upstream.abort()
@@ -147,10 +179,10 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
 
     let res: Response
     try {
-      res = await fetch(`${target.upstream.base_url}${upstreamReq.path}`, {
+      res = await fetch(upstreamReq.url, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${upstreamKey(target.upstream)}`,
+          ...upstreamReq.headers,
           'Content-Type': 'application/json',
           Accept: isStream ? 'text/event-stream' : 'application/json',
         },
@@ -184,7 +216,7 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
     if (contentType.includes('text/event-stream') && res.body) {
       clearTimeout(timer)
       req.signal.removeEventListener('abort', onClientAbort)
-      const kind: StreamKind = endpoint === 'responses' ? 'responses' : 'chat'
+      const kind: StreamKind = endpoint === 'responses' ? 'responses' : endpoint === 'messages' ? 'anthropic' : 'chat'
       const source = upstreamReq.convert ? res.body.pipeThrough(createChatToResponsesStream()) : res.body
       const inputChars = requestChars(upstreamReq.body)
       const stream = relayStream(source, {
@@ -230,25 +262,30 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
     }
     const output = upstreamReq.convert ? chatToResponses()(json) : json
     const usage = output.usage as Body | undefined
-    const tokens = usage
-      ? endpoint === 'responses'
-        ? { input: Number(usage.input_tokens ?? 0), output: Number(usage.output_tokens ?? 0) }
-        : { input: Number(usage.prompt_tokens ?? 0), output: Number(usage.completion_tokens ?? 0) }
-      : undefined
+    const tokens = !usage
+      ? undefined
+      : endpoint === 'messages'
+        ? { input: anthropicInputTokens(usage), output: Number(usage.output_tokens ?? 0) }
+        : endpoint === 'responses'
+          ? { input: Number(usage.input_tokens ?? 0), output: Number(usage.output_tokens ?? 0) }
+          : { input: Number(usage.prompt_tokens ?? 0), output: Number(usage.completion_tokens ?? 0) }
     record({
       statusCode: 200,
       error: '',
       usage: tokens,
-      estimate: { inputChars: requestChars(upstreamReq.body), outputChars: JSON.stringify(output.output ?? output.choices ?? '').length },
+      estimate: {
+        inputChars: requestChars(upstreamReq.body),
+        outputChars: JSON.stringify(output.output ?? output.choices ?? output.content ?? '').length,
+      },
     })
     return Response.json(output, { headers: { 'X-Request-Id': requestId } })
   } catch (error) {
     if (error instanceof GatewayError) {
       if (error.detail) console.warn(`[gateway] ${requestId} ${error.code}: ${error.detail}`)
-      return errorResponse(error, requestId)
+      return errorResponse(error, requestId, errorFormat)
     }
     console.error(`[gateway] ${requestId}`, error)
-    return errorResponse(new GatewayError('upstream_error', 'internal_error', '网关内部错误'), requestId)
+    return errorResponse(new GatewayError('upstream_error', 'internal_error', '网关内部错误'), requestId, errorFormat)
   }
 }
 
@@ -256,7 +293,7 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
 export function handleModels(req: NextRequest): Response {
   const requestId = requestIdOf(req)
   try {
-    const auth = authenticate(req.headers.get('authorization'), clientIp(req))
+    const auth = authenticate(req.headers, clientIp(req))
     const allowed = new Set(parseJsonArray(auth.token.models))
     const aliases = listAliases(auth.app.id).filter((a) => allowed.has(a.name))
     return Response.json(

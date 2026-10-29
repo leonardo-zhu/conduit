@@ -36,6 +36,8 @@ export interface UpstreamRow {
    * none 不提供，/v1/responses 拒绝。Chat Completions 默认所有上游都支持
    */
   responses_mode: ResponsesMode
+  /** Anthropic 兼容地址，空表示不提供 /v1/messages；按 ANTHROPIC_BASE_URL 的写法填，网关拼上 /v1/messages */
+  anthropic_base_url: string
 }
 
 export type ResponsesMode = 'native' | 'convert' | 'none'
@@ -75,6 +77,7 @@ function toChannel(row: UpstreamRow, used = 0) {
     status: row.status,
     models: parseJsonArray(row.models).join(','),
     responses_mode: row.responses_mode,
+    anthropic_base_url: row.anthropic_base_url,
     model_mapping: '',
     test_model: row.test_model || null,
     group: 'default',
@@ -128,6 +131,7 @@ interface ChannelInput {
   status?: unknown
   remark?: unknown
   responses_mode?: unknown
+  anthropic_base_url?: unknown
 }
 
 function readUpstreamInput(body: unknown, partial: boolean) {
@@ -143,8 +147,14 @@ function readUpstreamInput(body: unknown, partial: boolean) {
   if (!partial) fields.type = LEGACY_TYPE
   if (has('base_url')) {
     const baseUrl = typeof input.base_url === 'string' ? input.base_url.trim().replace(/\/+$/, '') : ''
-    if (!/^https?:\/\/\S+$/.test(baseUrl)) return { error: '请填写上游地址（http:// 或 https:// 开头）' }
+    if (!/^https?:\/\/\S+$/.test(baseUrl)) return { error: '请填写 OpenAI 兼容地址（http:// 或 https:// 开头）' }
     fields.base_url = baseUrl
+  }
+  // 选填，留空表示这个上游不提供 Anthropic Messages
+  if (has('anthropic_base_url')) {
+    const url = typeof input.anthropic_base_url === 'string' ? input.anthropic_base_url.trim().replace(/\/+$/, '') : ''
+    if (url && !/^https?:\/\/\S+$/.test(url)) return { error: 'Anthropic 兼容地址要以 http:// 或 https:// 开头' }
+    fields.anthropic_base_url = url
   }
   // 编辑时 key 留空表示不改
   const key = typeof input.key === 'string' ? input.key.trim() : ''

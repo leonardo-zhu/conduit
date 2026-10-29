@@ -43,6 +43,8 @@ export const channelSchema = z.object({
   // Conduit: responses 原生 Responses API 直接透传，chat 由网关转换
   // Conduit: 上游的 Responses API：原生 / 网关从 Chat 转换 / 不提供；Chat Completions 默认都支持
   responses_mode: z.enum(['native', 'convert', 'none']).optional(),
+  // Conduit: Anthropic 兼容地址，空表示不提供 /v1/messages
+  anthropic_base_url: z.string().optional(),
   status: z.number(), // 1: enabled, 0: manual disabled, 2: auto disabled
   name: z.string(),
   weight: z.number().nullish(),

@@ -26,10 +26,13 @@ function authError(detail: string) {
   return new GatewayError('authentication_error', 'invalid_token', AUTH_FAILED, detail)
 }
 
-/** 校验 Authorization: Bearer sk-...；所有失败对外都是同一个 401，原因只进日志 */
-export function authenticate(authorization: string | null, ip: string): GatewayAuth {
-  const key = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1]
-  if (!key) throw authError('缺少 Bearer 令牌')
+/**
+ * 校验令牌：Authorization: Bearer sk-...，或 Anthropic 客户端用的 x-api-key: sk-...。
+ * 所有失败对外都是同一个 401，原因只进日志
+ */
+export function authenticate(headers: Headers, ip: string): GatewayAuth {
+  const key = headers.get('authorization')?.match(/^Bearer\s+(\S+)$/i)?.[1] ?? headers.get('x-api-key')?.trim()
+  if (!key) throw authError('缺少令牌（Authorization: Bearer 或 x-api-key）')
 
   const token = db().prepare('SELECT * FROM tokens WHERE key_hash = ?').get(hashTokenKey(key)) as
     | TokenRow

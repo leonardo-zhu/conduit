@@ -56,7 +56,7 @@ runner、部署目录（`/opt/stacks/conduit`，组 32772 可写）在 2026-10-2
 
 4. **部署**：把分支合并到 `master` 并推送。部署时 `--remove-orphans` 会删掉旧的 `conduit-new-api` 和 `conduit-adapter` 容器。
 
-5. **配置**：打开 `https://conduit.r4s.leonardo-zhu.me`，用 `.env` 里的账号登录。在头像菜单里注册 Passkey（可选），然后建上游（填真实密钥；上游原生支持 Responses API 就勾上，否则按需开启网关转换，都不选则这个上游只提供 Chat Completions）、应用和别名、令牌。
+5. **配置**：打开 `https://conduit.r4s.leonardo-zhu.me`，用 `.env` 里的账号登录。在头像菜单里注册 Passkey（可选），然后建上游（填真实密钥和 OpenAI 兼容地址；Responses API 选原生支持、网关转换或不提供；上游有 Anthropic 接口就再填 Anthropic 兼容地址）、应用和别名、令牌。
 
 6. **（可选）导入 NewAPI 的令牌**：想沿用 NewAPI 里发过的令牌时才需要。NewAPI 的数据还在 `/opt/conduit/new-api/data`，先预览，确认后加 `--apply`：
 

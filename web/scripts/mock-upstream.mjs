@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * 假上游，给 scripts/gateway-smoke.mjs 用：同时提供 Chat Completions 和原生 Responses。
+ * 假上游，给 scripts/gateway-smoke.mjs 用：同时提供 Chat Completions、原生 Responses，
+ * 以及 /anthropic/v1/messages（Anthropic Messages，usage 为 输入 20 + 缓存 3 / 输出 9）。
  * 按请求里的 model 决定行为：
  *
  *   normal   正常回答，内容带 <think> 推理标签；usage 固定为 输入 10 / 输出 5（Responses 为 11 / 7）
@@ -9,7 +10,7 @@
  *   slow     流式慢慢吐 50 个片段（每 100ms 一个），用来测调用方中途断开
  *   error    返回 500
  *
- * GET /_last 返回最近一次收到的请求（路径和请求体），GET /_stats 返回被中途断开的流的数量。
+ * GET /_last 返回最近一次收到的请求（路径、请求体和鉴权相关的头），GET /_stats 返回被中途断开的流的数量。
  *
  *   node scripts/mock-upstream.mjs [端口，默认 3099]
  */
@@ -93,6 +94,32 @@ function responses(req, res, body) {
   res.end()
 }
 
+function messages(req, res, body) {
+  const message = {
+    id: 'msg_anthropic1',
+    type: 'message',
+    role: 'assistant',
+    model: body.model,
+    content: [{ type: 'text', text: 'Anthropic 回答' }],
+    stop_reason: 'end_turn',
+    usage: { input_tokens: 20, cache_read_input_tokens: 3, output_tokens: 9 },
+  }
+  if (!body.stream) {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    return res.end(JSON.stringify(message))
+  }
+  sse(res)
+  const event = (type, obj) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...obj })}\n\n`)
+  event('message_start', { message: { ...message, content: [], stop_reason: null, usage: { input_tokens: 20, cache_read_input_tokens: 3, output_tokens: 1 } } })
+  event('content_block_start', { index: 0, content_block: { type: 'text', text: '' } })
+  event('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Anthropic ' } })
+  event('content_block_delta', { index: 0, delta: { type: 'text_delta', text: '回答' } })
+  event('content_block_stop', { index: 0 })
+  event('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 9 } })
+  event('message_stop', {})
+  res.end()
+}
+
 http
   .createServer(async (req, res) => {
     if (req.method === 'GET' && req.url === '/_last') return res.end(JSON.stringify(last))
@@ -103,9 +130,16 @@ http
     let raw = ''
     for await (const chunk of req) raw += chunk
     const body = raw ? JSON.parse(raw) : {}
-    last = { path: req.url, body, authorization: req.headers.authorization }
+    last = {
+      path: req.url,
+      body,
+      authorization: req.headers.authorization,
+      apiKey: req.headers['x-api-key'],
+      anthropicVersion: req.headers['anthropic-version'],
+    }
     if (req.url === '/chat/completions') return chat(req, res, body)
     if (req.url === '/responses') return responses(req, res, body)
+    if (req.url === '/anthropic/v1/messages') return messages(req, res, body)
     res.writeHead(404).end()
   })
   .listen(PORT, '127.0.0.1', () => console.log(`mock upstream on http://127.0.0.1:${PORT}`))

@@ -3,12 +3,13 @@
  *
  * - 字节原样转发（需要协议转换的，转换在这之前做完）
  * - 读 usage：Responses 流看 response.completed / incomplete / failed 里的 response.usage，
- *   Chat 流看带 usage 的 chunk；同时记首个 token 的时间和输出的字符数（拿不到 usage 时估算用）
+ *   Chat 流看带 usage 的 chunk，Anthropic 流看 message_start（输入）和 message_delta（累计输出）；
+ *   同时记首个 token 的时间和输出的字符数（拿不到 usage 时估算用）
  * - 调用方断开：立即中止上游请求，按已经收到的输出记账
  * - 上游超过 idleMs 没有任何数据：中止上游，在流里发一个错误事件后结束
  */
 
-export type StreamKind = 'responses' | 'chat'
+export type StreamKind = 'responses' | 'chat' | 'anthropic'
 
 export interface StreamOutcome {
   usage?: { input: number; output: number }
@@ -59,7 +60,37 @@ class UsageTap {
       return
     }
     if (this.kind === 'responses') this.responsesEvent(json)
+    else if (this.kind === 'anthropic') this.anthropicEvent(json)
     else this.chatChunk(json)
+  }
+
+  /** Anthropic Messages：输入在 message_start，输出在 message_delta（累计值），缓存命中和写入都算输入 */
+  private anthropicEvent(event: Json) {
+    switch (event.type) {
+      case 'message_start': {
+        const usage = (event.message as Json | undefined)?.usage as Json | undefined
+        if (usage) this.outcome.usage = { input: anthropicInputTokens(usage), output: Number(usage.output_tokens ?? 0) }
+        break
+      }
+      case 'message_delta': {
+        const usage = event.usage as Json | undefined
+        if (usage) {
+          const input = usage.input_tokens === undefined ? (this.outcome.usage?.input ?? 0) : anthropicInputTokens(usage)
+          this.outcome.usage = { input, output: Number(usage.output_tokens ?? 0) }
+        }
+        break
+      }
+      case 'content_block_delta': {
+        const delta = event.delta as Json | undefined
+        this.sawOutput(String(delta?.text ?? delta?.partial_json ?? delta?.thinking ?? ''))
+        break
+      }
+      case 'error': {
+        const error = event.error as Json | undefined
+        this.outcome.error = `上游流内错误：${String(error?.message ?? '')}`.slice(0, 300)
+        break
+      }
+    }
   }
 
   private responsesEvent(event: Json) {
@@ -103,8 +134,22 @@ class UsageTap {
   }
 }
 
-/** 流里的错误事件：Responses 用 error 事件，Chat 用带 error 的 data 行 */
+/** Anthropic 的 input_tokens 不含缓存部分，缓存命中和写入也计入输入 */
+export function anthropicInputTokens(usage: Json): number {
+  return (
+    Number(usage.input_tokens ?? 0) +
+    Number(usage.cache_creation_input_tokens ?? 0) +
+    Number(usage.cache_read_input_tokens ?? 0)
+  )
+}
+
+/** 流里的错误事件：Responses 和 Anthropic 用 error 事件，Chat 用带 error 的 data 行 */
 function errorEvent(kind: StreamKind, code: string, message: string): Uint8Array {
+  if (kind === 'anthropic') {
+    return new TextEncoder().encode(
+      `event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: code === 'upstream_timeout' ? 'timeout_error' : 'api_error', message } })}\n\n`
+    )
+  }
   const text =
     kind === 'responses'
       ? `event: error\ndata: ${JSON.stringify({ type: 'error', code, message })}\n\n`

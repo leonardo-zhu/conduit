@@ -45,7 +45,6 @@ import {
 } from '@/components/drawer-layout'
 import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -71,6 +70,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { handleServerError } from '@/lib/handle-server-error'
 
@@ -79,20 +79,20 @@ import { CHANNEL_STATUS } from '../../constants'
 import { channelsQueryKeys } from '../../lib'
 import type { Channel } from '../../types'
 
-// Conduit: 上游不区分服务商，也不按服务商给默认值。Chat Completions 默认都支持；
-// Responses API 由这里勾选：原生支持，或由网关从 Chat 转换，都不选就是不提供
+// Conduit: 上游不区分服务商，也不按服务商给默认值。
+// OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 三选一（不提供 / 网关转换 / 原生）；
+// Anthropic 兼容地址选填，填了就提供 /v1/messages（直接转发，不和 OpenAI 格式互转）
 type ResponsesMode = NonNullable<Channel['responses_mode']>
-
-function toResponsesMode(native: boolean, convert: boolean): ResponsesMode {
-  if (native) return 'native'
-  return convert ? 'convert' : 'none'
-}
+const RESPONSES_MODES: ResponsesMode[] = ['none', 'convert', 'native']
 
 function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
-    responses_native: z.boolean(),
-    responses_convert: z.boolean(),
+    responses_mode: z.enum(['none', 'convert', 'native']),
+    anthropic_base_url: z
+      .string()
+      .trim()
+      .refine((v) => !v || /^https?:\/\//.test(v), t('Start the address with http:// or https://')),
     base_url: z.string().trim().min(1, t('Please enter the base URL')),
     // 编辑时留空表示不改密钥
     key: isUpdate
@@ -110,8 +110,8 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 const EMPTY_VALUES: FormValues = {
   name: '',
   // 新建默认只有 Chat Completions
-  responses_native: false,
-  responses_convert: false,
+  responses_mode: 'none',
+  anthropic_base_url: '',
   base_url: '',
   key: '',
   models: [],
@@ -123,8 +123,8 @@ const EMPTY_VALUES: FormValues = {
 function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
-    responses_native: channel.responses_mode === 'native',
-    responses_convert: channel.responses_mode === 'convert',
+    responses_mode: channel.responses_mode ?? 'none',
+    anthropic_base_url: channel.anthropic_base_url ?? '',
     base_url: channel.base_url ?? '',
     key: '',
     models: channel.models.split(',').filter(Boolean),
@@ -137,7 +137,8 @@ function toFormValues(channel: Channel): FormValues {
 function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
-    responses_mode: toResponsesMode(values.responses_native, values.responses_convert),
+    responses_mode: values.responses_mode,
+    anthropic_base_url: values.anthropic_base_url.replace(/\/+$/, ''),
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
     test_model: values.test_model || null,
@@ -178,8 +179,20 @@ export function ChannelMutateDrawer({
   }, [open, currentRow, form])
 
   const models = form.watch('models')
-  const responsesNative = form.watch('responses_native')
-  const responsesMode = toResponsesMode(responsesNative, form.watch('responses_convert'))
+  const responsesMode = form.watch('responses_mode')
+  const hasAnthropic = !!form.watch('anthropic_base_url').trim()
+  const RESPONSES_HINT: Record<ResponsesMode, string> = {
+    none: t('Calls to /v1/responses are rejected with a hint to use /v1/chat/completions'),
+    convert: t(
+      'The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.'
+    ),
+    native: t('The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is'),
+  }
+  const RESPONSES_LABEL: Record<ResponsesMode, string> = {
+    none: t('Not offered'),
+    convert: t('Convert in the gateway'),
+    native: t('Native'),
+  }
   const [isFetchingModels, setIsFetchingModels] = useState(false)
 
   // 从上游的 GET /models 拉取，并入已填的模型（只有保存过的上游才有密钥可用）
@@ -266,67 +279,73 @@ export function ChannelMutateDrawer({
                   </FormItem>
                 )}
               />
-              <div className='space-y-3'>
+              <div className='space-y-4'>
                 <Label>{t('Endpoints')}</Label>
-                <div className='flex items-start gap-3'>
-                  <Checkbox checked disabled className='mt-0.5' />
-                  <div className='space-y-0.5'>
-                    <div className='text-sm font-medium'>Chat Completions</div>
-                    <p className='text-muted-foreground text-xs'>
-                      {t('The upstream /chat/completions; every upstream is assumed to support it')}
-                    </p>
-                  </div>
-                </div>
                 <FormField
                   control={form.control}
-                  name='responses_native'
+                  name='base_url'
                   render={({ field }) => (
-                    <FormItem className='flex items-start gap-3 space-y-0'>
+                    <FormItem>
+                      <FormLabel className='text-sm'>{t('OpenAI-compatible base URL')}</FormLabel>
                       <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={(checked) => field.onChange(checked === true)}
-                          className='mt-0.5'
-                        />
+                        <Input {...field} placeholder='https://api.example.com/v1' />
                       </FormControl>
-                      <div className='space-y-0.5'>
-                        <FormLabel className='text-sm font-medium'>
-                          {t('Responses API (native)')}
-                        </FormLabel>
-                        <FormDescription className='text-xs'>
-                          {t('The upstream has /responses; requests are forwarded as-is')}
-                        </FormDescription>
-                      </div>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
-                {!responsesNative && (
+                <div className='space-y-3 border-l-2 pl-3'>
+                  <div className='flex items-baseline justify-between gap-3'>
+                    <span className='text-sm font-medium'>Chat Completions</span>
+                    <span className='text-muted-foreground text-xs'>
+                      {t('Always offered')}
+                    </span>
+                  </div>
                   <FormField
                     control={form.control}
-                    name='responses_convert'
+                    name='responses_mode'
                     render={({ field }) => (
-                      <FormItem className='flex items-start gap-3 space-y-0 pl-7'>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className='mt-0.5'
-                          />
-                        </FormControl>
-                        <div className='space-y-0.5'>
-                          <FormLabel className='text-sm font-medium'>
-                            {t('Convert in the gateway')}
-                          </FormLabel>
-                          <FormDescription className='text-xs'>
-                            {t(
-                              'Offer /v1/responses by converting to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.'
-                            )}
-                          </FormDescription>
-                        </div>
+                      <FormItem className='space-y-2'>
+                        <FormLabel className='text-sm font-medium'>Responses API</FormLabel>
+                        <Tabs value={field.value} onValueChange={(v) => field.onChange(v as ResponsesMode)}>
+                          <TabsList className='w-full'>
+                            {RESPONSES_MODES.map((mode) => (
+                              <TabsTrigger key={mode} value={mode}>
+                                {RESPONSES_LABEL[mode]}
+                              </TabsTrigger>
+                            ))}
+                          </TabsList>
+                        </Tabs>
+                        <FormDescription className='text-xs'>
+                          {RESPONSES_HINT[field.value]}
+                        </FormDescription>
                       </FormItem>
                     )}
                   />
-                )}
+                </div>
+                <FormField
+                  control={form.control}
+                  name='anthropic_base_url'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className='text-sm'>
+                        {t('Anthropic-compatible base URL')}
+                        <span className='text-muted-foreground ms-1 text-xs font-normal'>
+                          {t('(optional)')}
+                        </span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder='https://api.example.com/anthropic' />
+                      </FormControl>
+                      <FormDescription className='text-xs'>
+                        {t(
+                          'Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API.'
+                        )}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <p className='text-muted-foreground text-xs'>
                   {t('Apps can call')}: <code>/v1/chat/completions</code>
                   {responsesMode !== 'none' && (
@@ -336,24 +355,14 @@ export function ChannelMutateDrawer({
                       {responsesMode === 'convert' && ` (${t('converted by the gateway')})`}
                     </>
                   )}
+                  {hasAnthropic && (
+                    <>
+                      {', '}
+                      <code>/v1/messages</code>
+                    </>
+                  )}
                 </p>
               </div>
-              <FormField
-                control={form.control}
-                name='base_url'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Base URL')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder='https://api.example.com/v1'
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <FormField
                 control={form.control}
                 name='key'

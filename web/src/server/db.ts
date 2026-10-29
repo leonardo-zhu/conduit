@@ -125,6 +125,9 @@ const MIGRATIONS = [
   // 不提供（none）。取代 protocol 列（保留不用），已有上游按原来的 protocol 迁移，行为不变
   `ALTER TABLE upstreams ADD COLUMN responses_mode TEXT NOT NULL DEFAULT 'none';
   UPDATE upstreams SET responses_mode = CASE protocol WHEN 'responses' THEN 'native' ELSE 'convert' END;`,
+  // Anthropic 兼容地址（选填）：填了就提供 /v1/messages，直接转发到 <地址>/v1/messages，不做和 OpenAI 格式的转换。
+  // 同一家的 OpenAI 和 Anthropic 接口通常是不同地址、同一个密钥
+  `ALTER TABLE upstreams ADD COLUMN anthropic_base_url TEXT NOT NULL DEFAULT '';`,
 ]
 
 function open(): DatabaseSync {
