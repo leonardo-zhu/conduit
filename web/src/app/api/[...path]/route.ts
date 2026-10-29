@@ -4,8 +4,8 @@ import '@/mock/handlers'
 import { isMockResult, match } from '@/mock/router'
 import { readSession } from '@/server/auth'
 
-// 不登录也能访问的接口：登录页要用的站点状态和公告
-const PUBLIC_PATHS = new Set(['/api/status', '/api/notice'])
+// 不登录也能访问的假接口：登录页要用的公告
+const PUBLIC_PATHS = new Set(['/api/notice'])
 
 // 假数据接口的统一入口，见 src/mock/。真实接口写成具体路由后会优先于这里匹配
 async function handle(req: NextRequest) {
