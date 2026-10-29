@@ -3,8 +3,10 @@
  *
  * 同一类型、同一对象的事件，在上一条还没读、或者一小时内又出现时，合并到上一条（次数加 1），
  * 不另起一条，免得一个上游挂掉刷满列表。30 天前的事件在写入新事件时顺手清掉。
+ * 新的一条会推到 Telegram（配置了的话，见 telegram.ts）。
  */
 import { db, nowSeconds } from './db'
+import { pushEventToTelegram } from './telegram'
 
 export type EventKind =
   | 'upstream_auth' // 上游返回 401 / 403，多半是密钥失效或没有权限
@@ -89,12 +91,12 @@ export function raiseEvent(input: EventInput): boolean {
 }
 
 /**
- * 记事件不能影响请求本身：写库出错只打日志。
+ * 记事件不能影响请求本身：写库出错只打日志。新的一条推到 Telegram。
  * 网关里都通过这个调用
  */
 export function safeRaiseEvent(input: EventInput) {
   try {
-    raiseEvent(input)
+    if (raiseEvent(input)) pushEventToTelegram(input)
   } catch (error) {
     console.error('[events] 记录事件失败', error)
   }
