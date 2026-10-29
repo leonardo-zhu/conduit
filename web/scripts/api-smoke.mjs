@@ -93,6 +93,7 @@ const upstream = await call('POST', '/api/channel', {
 check('创建上游', upstream.success && upstream.data.key === '' && upstream.data.key_last4 === '1234', upstream)
 const upstreamId = upstream.data?.id
 check('地址去掉结尾斜杠', upstream.data?.base_url === 'https://example.com/v1', upstream.data?.base_url)
+check('新建时默认启用', upstream.data?.status === 1, upstream.data?.status)
 
 const stored = db.prepare('SELECT key_enc FROM upstreams WHERE id = ?').get(upstreamId)
 check('库里的上游密钥是密文', stored && !stored.key_enc.includes('upstream-secret') && stored.key_enc.startsWith('v1:'), stored)
