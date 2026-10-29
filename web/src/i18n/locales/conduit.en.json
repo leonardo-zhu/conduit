@@ -125,7 +125,6 @@
   "Calls to /v1/responses are rejected with a hint to use /v1/chat/completions": "Calls to /v1/responses are rejected with a hint to use /v1/chat/completions",
   "The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.": "The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.",
   "The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is": "The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is",
-  "Not offered": "Not offered",
   "Native": "Native",
   "OpenAI-compatible base URL": "OpenAI-compatible base URL",
   "Always offered": "Always offered",

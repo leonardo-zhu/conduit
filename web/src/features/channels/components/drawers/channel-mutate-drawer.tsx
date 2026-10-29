@@ -80,15 +80,18 @@ import { channelsQueryKeys } from '../../lib'
 import type { Channel } from '../../types'
 
 // Conduit: 上游不区分服务商，也不按服务商给默认值。
-// OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 三选一（不提供 / 网关转换 / 原生）；
-// Anthropic 兼容地址选填，填了就提供 /v1/messages（直接转发，不和 OpenAI 格式互转）
+// OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 用开关决定是否提供（默认关），
+// 打开后再选原生支持（默认）还是网关转换；Anthropic 兼容地址选填，填了就提供 /v1/messages
+// （直接转发，不和 OpenAI 格式互转）
 type ResponsesMode = NonNullable<Channel['responses_mode']>
-const RESPONSES_MODES: ResponsesMode[] = ['none', 'convert', 'native']
+type ResponsesKind = Exclude<ResponsesMode, 'none'>
+const RESPONSES_KINDS: ResponsesKind[] = ['native', 'convert']
 
 function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
-    responses_mode: z.enum(['none', 'convert', 'native']),
+    responses_enabled: z.boolean(),
+    responses_kind: z.enum(['native', 'convert']),
     anthropic_base_url: z
       .string()
       .trim()
@@ -109,8 +112,9 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 
 const EMPTY_VALUES: FormValues = {
   name: '',
-  // 新建默认只有 Chat Completions
-  responses_mode: 'none',
+  // 新建默认只有 Chat Completions；打开 Responses 时默认原生支持
+  responses_enabled: false,
+  responses_kind: 'native',
   anthropic_base_url: '',
   base_url: '',
   key: '',
@@ -123,7 +127,8 @@ const EMPTY_VALUES: FormValues = {
 function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
-    responses_mode: channel.responses_mode ?? 'none',
+    responses_enabled: (channel.responses_mode ?? 'none') !== 'none',
+    responses_kind: channel.responses_mode === 'convert' ? 'convert' : 'native',
     anthropic_base_url: channel.anthropic_base_url ?? '',
     base_url: channel.base_url ?? '',
     key: '',
@@ -137,7 +142,7 @@ function toFormValues(channel: Channel): FormValues {
 function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
-    responses_mode: values.responses_mode,
+    responses_mode: values.responses_enabled ? values.responses_kind : 'none',
     anthropic_base_url: values.anthropic_base_url.replace(/\/+$/, ''),
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
@@ -179,7 +184,7 @@ export function ChannelMutateDrawer({
   }, [open, currentRow, form])
 
   const models = form.watch('models')
-  const responsesMode = form.watch('responses_mode')
+  const responsesMode: ResponsesMode = form.watch('responses_enabled') ? form.watch('responses_kind') : 'none'
   const hasAnthropic = !!form.watch('anthropic_base_url').trim()
   const RESPONSES_HINT: Record<ResponsesMode, string> = {
     none: t('Calls to /v1/responses are rejected with a hint to use /v1/chat/completions'),
@@ -188,10 +193,9 @@ export function ChannelMutateDrawer({
     ),
     native: t('The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is'),
   }
-  const RESPONSES_LABEL: Record<ResponsesMode, string> = {
-    none: t('Not offered'),
-    convert: t('Convert in the gateway'),
+  const RESPONSES_LABEL: Record<ResponsesKind, string> = {
     native: t('Native'),
+    convert: t('Convert in the gateway'),
   }
   const [isFetchingModels, setIsFetchingModels] = useState(false)
 
@@ -303,25 +307,40 @@ export function ChannelMutateDrawer({
                   </div>
                   <FormField
                     control={form.control}
-                    name='responses_mode'
+                    name='responses_enabled'
                     render={({ field }) => (
-                      <FormItem className='space-y-2'>
+                      <FormItem className='flex items-center justify-between gap-3 space-y-0'>
                         <FormLabel className='text-sm font-medium'>Responses API</FormLabel>
-                        <Tabs value={field.value} onValueChange={(v) => field.onChange(v as ResponsesMode)}>
-                          <TabsList className='w-full'>
-                            {RESPONSES_MODES.map((mode) => (
-                              <TabsTrigger key={mode} value={mode}>
-                                {RESPONSES_LABEL[mode]}
-                              </TabsTrigger>
-                            ))}
-                          </TabsList>
-                        </Tabs>
-                        <FormDescription className='text-xs'>
-                          {RESPONSES_HINT[field.value]}
-                        </FormDescription>
+                        <FormControl>
+                          <Switch checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
                       </FormItem>
                     )}
                   />
+                  {responsesMode === 'none' ? (
+                    <p className='text-muted-foreground -mt-1 text-xs'>{RESPONSES_HINT.none}</p>
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name='responses_kind'
+                      render={({ field }) => (
+                        <FormItem className='space-y-2'>
+                          <Tabs value={field.value} onValueChange={(v) => field.onChange(v as ResponsesKind)}>
+                            <TabsList className='w-full'>
+                              {RESPONSES_KINDS.map((kind) => (
+                                <TabsTrigger key={kind} value={kind}>
+                                  {RESPONSES_LABEL[kind]}
+                                </TabsTrigger>
+                              ))}
+                            </TabsList>
+                          </Tabs>
+                          <FormDescription className='text-xs'>
+                            {RESPONSES_HINT[field.value]}
+                          </FormDescription>
+                        </FormItem>
+                      )}
+                    />
+                  )}
                 </div>
                 <FormField
                   control={form.control}
