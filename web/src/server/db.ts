@@ -100,6 +100,9 @@ const MIGRATIONS = [
   CREATE INDEX usage_logs_created ON usage_logs(created_at);
   CREATE INDEX usage_logs_app ON usage_logs(app_id, created_at);
   CREATE INDEX usage_logs_token ON usage_logs(token_id, created_at);`,
+  // 上游的协议：responses 原生支持 Responses API，直接透传；chat 只支持 Chat Completions，由网关转换
+  `ALTER TABLE upstreams ADD COLUMN protocol TEXT NOT NULL DEFAULT 'chat';
+  UPDATE upstreams SET protocol = 'responses' WHERE type = 45;`,
 ]
 
 function open(): DatabaseSync {
@@ -107,7 +110,10 @@ function open(): DatabaseSync {
   mkdirSync(dir, { recursive: true })
   const db = new DatabaseSync(path.join(dir, 'conduit.db'))
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
+  return db
+}
 
+function migrate(db: DatabaseSync) {
   const { user_version: version } = db.prepare('PRAGMA user_version').get() as {
     user_version: number
   }
@@ -122,14 +128,21 @@ function open(): DatabaseSync {
       throw error
     }
   }
-  return db
 }
 
-// 开发时热更新会重新执行模块，挂在 globalThis 上避免重复打开
-const globalRef = globalThis as typeof globalThis & { __conduitDb?: DatabaseSync }
+// 开发时热更新会重新执行模块，连接挂在 globalThis 上避免重复打开；
+// 记下已迁移到的版本，热更新后 MIGRATIONS 变长了就补跑新的迁移
+const globalRef = globalThis as typeof globalThis & {
+  __conduitDb?: DatabaseSync
+  __conduitDbVersion?: number
+}
 
 export function db(): DatabaseSync {
   globalRef.__conduitDb ??= open()
+  if (globalRef.__conduitDbVersion !== MIGRATIONS.length) {
+    migrate(globalRef.__conduitDb)
+    globalRef.__conduitDbVersion = MIGRATIONS.length
+  }
   return globalRef.__conduitDb
 }
 

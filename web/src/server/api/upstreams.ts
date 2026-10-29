@@ -29,7 +29,12 @@ export interface UpstreamRow {
   created_at: number
   test_time: number
   response_time: number
+  /** responses：原生 Responses API，直接透传；chat：只支持 Chat Completions，由网关转换 */
+  protocol: UpstreamProtocol
 }
+
+export type UpstreamProtocol = 'responses' | 'chat'
+const PROTOCOLS = new Set<UpstreamProtocol>(['responses', 'chat'])
 
 /** Conduit 支持的类型：1 OpenAI 兼容，8 自定义，45 火山方舟，35 MiniMax */
 const UPSTREAM_TYPES = new Set([1, 8, 45, 35])
@@ -64,6 +69,7 @@ function toChannel(row: UpstreamRow, used = 0) {
     key_last4: row.key_last4,
     status: row.status,
     models: parseJsonArray(row.models).join(','),
+    protocol: row.protocol,
     model_mapping: '',
     test_model: row.test_model || null,
     group: 'default',
@@ -120,6 +126,7 @@ interface ChannelInput {
   test_model?: unknown
   status?: unknown
   remark?: unknown
+  protocol?: unknown
 }
 
 function readUpstreamInput(body: unknown, partial: boolean) {
@@ -161,6 +168,12 @@ function readUpstreamInput(body: unknown, partial: boolean) {
     fields.status = status === UPSTREAM_STATUS.ENABLED ? UPSTREAM_STATUS.ENABLED : UPSTREAM_STATUS.DISABLED
   }
   if (has('remark')) fields.remark = typeof input.remark === 'string' ? input.remark.slice(0, 255) : ''
+  if (has('protocol')) {
+    // 新建时没传：火山方舟默认原生 Responses，其余默认 Chat
+    const protocol = input.protocol ?? (fields.type === 45 ? 'responses' : 'chat')
+    if (!PROTOCOLS.has(protocol as UpstreamProtocol)) return { error: '协议只能是 responses 或 chat' }
+    fields.protocol = protocol as string
+  }
   return { fields }
 }
 

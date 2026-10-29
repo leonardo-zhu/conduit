@@ -93,5 +93,9 @@
   "Regenerate key": "重新生成密钥",
   "The current key of \"{{name}}\" stops working immediately. Devices using it must be updated with the new key.": "“{{name}}”当前的密钥会立即失效，用它的设备需要换成新密钥。",
   "Regenerate": "重新生成",
-  "Copied. Set CONDUIT_API_KEY to your key before running it.": "已复制。运行前先把环境变量 CONDUIT_API_KEY 设为你的令牌。"
+  "Copied. Set CONDUIT_API_KEY to your key before running it.": "已复制。运行前先把环境变量 CONDUIT_API_KEY 设为你的令牌。",
+  "Protocol": "协议",
+  "Responses API (passed through)": "Responses API（直接透传）",
+  "Chat Completions (converted by the gateway)": "Chat Completions（由网关转换）",
+  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "应用始终调用 /v1/responses。上游不支持 Responses API 时选 Chat Completions，由网关转换。"
 }
