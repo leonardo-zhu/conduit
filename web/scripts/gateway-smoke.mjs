@@ -1,0 +1,280 @@
+#!/usr/bin/env node
+/**
+ * 网关数据面的冒烟测试：/v1/responses、/v1/chat/completions、/v1/models，
+ * 用 scripts/mock-upstream.mjs 当上游。重点是阶段 3 的验证清单：
+ * 流式用量是否准确、调用方中途断开时是否多扣、同一令牌并发时额度是否正确。
+ *
+ * 建的数据都以 smoke-gw 开头，结束时删掉。
+ *
+ *   pnpm dev                              # 一个终端
+ *   node scripts/mock-upstream.mjs        # 另一个终端
+ *   node scripts/gateway-smoke.mjs [http://localhost:3020] [密码]
+ */
+import { DatabaseSync } from 'node:sqlite'
+import path from 'node:path'
+
+const BASE = process.argv[2] || 'http://localhost:3020'
+const PASSWORD = process.argv[3] || 'conduit-dev-local'
+const MOCK = 'http://127.0.0.1:3099'
+const db = new DatabaseSync(path.resolve(process.env.CONDUIT_DATA_DIR || '.data', 'conduit.db'))
+db.exec('PRAGMA foreign_keys = ON')
+
+let cookie = ''
+async function admin(method, p, body) {
+  const res = await fetch(BASE + p, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const session = res.headers.getSetCookie().find((c) => c.startsWith('conduit_session='))
+  if (session) cookie = session.split(';')[0]
+  const json = await res.json()
+  if (!json.success) throw new Error(`${method} ${p}: ${json.message}`)
+  return json.data
+}
+
+const gw = (p, key, body, headers = {}) =>
+  fetch(BASE + p, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer sk-${key}` } : {}), ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+/** 读完一个 SSE 响应，返回事件列表（data 解析成 JSON） */
+async function readEvents(res) {
+  const text = await res.text()
+  return text
+    .split('\n')
+    .filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trim())
+    .filter((d) => d !== '[DONE]')
+    .map((d) => JSON.parse(d))
+}
+
+const lastLog = (requestId) => db.prepare('SELECT * FROM usage_logs WHERE request_id = ?').get(requestId)
+const tokenUsed = (id) => db.prepare('SELECT used FROM tokens WHERE id = ?').get(id).used
+const mockLast = async () => (await fetch(`${MOCK}/_last`)).json()
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+let failed = 0
+function check(label, okay, detail) {
+  console.log(`${okay ? '✓' : '✗'} ${label}${okay ? '' : `  ${JSON.stringify(detail)?.slice(0, 400)}`}`)
+  if (!okay) failed += 1
+}
+
+try {
+  await fetch(`${MOCK}/_stats`)
+} catch {
+  console.error('先运行 node scripts/mock-upstream.mjs')
+  process.exit(1)
+}
+
+// ---------------------------------------------------------------------------
+// 准备
+// ---------------------------------------------------------------------------
+
+db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
+await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
+
+const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', type: 1, protocol: 'chat', base_url: MOCK, key: 'mock-chat-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', type: 45, base_url: MOCK, key: 'mock-native-key' } })
+const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', type: 1, base_url: MOCK, key: 'k', status: 2 } })
+check('火山方舟类型默认原生 Responses', nativeUp.protocol === 'responses', nativeUp.protocol)
+
+const app = await admin('POST', '/api/user', { username: 'smoke-gw', quota: 0 })
+const alias = (name, upstream, model) => ({ name, upstream_id: upstream.id, upstream_model: model })
+await admin('PUT', `/api/app/${app.id}/aliases`, {
+  aliases: [
+    alias('smoke-gw-chat', chatUp, 'normal'),
+    alias('smoke-gw-native', nativeUp, 'normal'),
+    alias('smoke-gw-tool', chatUp, 'tool'),
+    alias('smoke-gw-nousage', chatUp, 'nousage'),
+    alias('smoke-gw-slow', chatUp, 'slow'),
+    alias('smoke-gw-error', chatUp, 'error'),
+    alias('smoke-gw-off', offUp, 'normal'),
+    alias('smoke-gw-hidden', chatUp, 'normal'),
+  ],
+})
+const allModels = 'smoke-gw-chat,smoke-gw-native,smoke-gw-tool,smoke-gw-nousage,smoke-gw-slow,smoke-gw-error,smoke-gw-off'
+const token = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-main', unlimited_quota: true, expired_time: -1, model_limits: allModels })
+const key = token.key
+
+// ---------------------------------------------------------------------------
+console.log('\n鉴权和模型列表')
+
+let res = await gw('/v1/responses', null, { model: 'smoke-gw-chat', input: 'hi' })
+let json = await res.json()
+check('没带令牌 401', res.status === 401 && json.error?.type === 'authentication_error', json)
+
+res = await gw('/v1/responses', 'not-a-real-key', { model: 'smoke-gw-chat', input: 'hi' })
+check('令牌不对 401', res.status === 401, res.status)
+
+res = await gw('/v1/models', key)
+json = await res.json()
+check(
+  '模型列表只含白名单里的别名',
+  json.data?.length === 7 && json.data.some((m) => m.id === 'smoke-gw-chat') && !json.data.some((m) => m.id === 'smoke-gw-hidden'),
+  json
+)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-hidden', input: 'hi' })
+json = await res.json()
+check('白名单外的别名 400 model_not_found', res.status === 400 && json.error?.code === 'model_not_found', json)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-off', input: 'hi' })
+check('上游停用 503', res.status === 503, res.status)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi', previous_response_id: 'resp_x' })
+json = await res.json()
+check('不支持 previous_response_id', res.status === 400 && json.error?.code === 'unsupported_parameter', json)
+
+res = await fetch(BASE + '/v1/responses', { method: 'POST', headers: { Authorization: `Bearer sk-${key}` }, body: '{oops' })
+check('请求体不是 JSON 400', res.status === 400, res.status)
+
+// ---------------------------------------------------------------------------
+console.log('\n/v1/responses → Chat 上游（转换）')
+
+res = await gw(
+  '/v1/responses',
+  key,
+  { model: 'smoke-gw-chat', instructions: '你是助手', input: [{ role: 'user', content: [{ type: 'input_text', text: '你好' }] }], store: false },
+  { 'X-Request-Id': 'smoke-gw-req-1' }
+)
+json = await res.json()
+let upstreamReq = await mockLast()
+check('转发到上游的 /chat/completions，模型换成上游模型名', upstreamReq.path === '/chat/completions' && upstreamReq.body.model === 'normal', upstreamReq)
+check('instructions 变成 system 消息，去掉 store', upstreamReq.body.messages[0].role === 'system' && !('store' in upstreamReq.body), upstreamReq.body)
+check('用的是上游自己的密钥', upstreamReq.authorization === 'Bearer mock-chat-key', upstreamReq.authorization)
+check('响应头带回 X-Request-Id', res.headers.get('x-request-id') === 'smoke-gw-req-1', res.headers.get('x-request-id'))
+const text = json.output?.find((o) => o.type === 'message')?.content?.[0]?.text
+check('非流式转成 Responses，<think> 拆成 reasoning', text === '你好，世界' && json.output.some((o) => o.type === 'reasoning'), json)
+let log = lastLog('smoke-gw-req-1')
+check('记账：输入 10 / 输出 5，不是估算', log?.input_tokens === 10 && log.output_tokens === 5 && !log.estimated && log.error === '', log)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: '你好', stream: true }, { 'X-Request-Id': 'smoke-gw-req-2' })
+let events = await readEvents(res)
+const types = events.map((e) => e.type)
+upstreamReq = await mockLast()
+check('流式请求要求上游返回 usage', upstreamReq.body.stream_options?.include_usage === true, upstreamReq.body)
+check('流式事件名是标准的 response.output_text.delta', types.includes('response.output_text.delta') && !types.includes('response.content_part.delta'), types)
+check('第一个事件是 response.created，最后是 response.completed', types[0] === 'response.created' && types.at(-1) === 'response.completed', types)
+const streamed = events.filter((e) => e.type === 'response.output_text.delta').map((e) => e.delta).join('')
+check('拆开的 <think> 标签被去掉', streamed === '你好，世界', streamed)
+check('response.completed 带 usage', events.at(-1).response?.usage?.output_tokens === 5, events.at(-1))
+await sleep(200)
+log = lastLog('smoke-gw-req-2')
+check('流式记账准确：10 / 5，有首字时间', log?.input_tokens === 10 && log.output_tokens === 5 && !log.estimated && log.is_stream === 1, log)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-tool', input: '北京天气', stream: true, tools: [{ type: 'function', name: 'get_weather', parameters: {} }] })
+events = await readEvents(res)
+const done = events.find((e) => e.type === 'response.function_call_arguments.done')
+check('流式 tool call 转换', done?.arguments === '{"city":"北京"}' && events.at(-1).response.output.some((o) => o.type === 'function_call'), events.map((e) => e.type))
+upstreamReq = await mockLast()
+check('tools 转成 Chat 格式', upstreamReq.body.tools?.[0]?.function?.name === 'get_weather', upstreamReq.body.tools)
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-nousage', input: '你好', stream: true }, { 'X-Request-Id': 'smoke-gw-req-3' })
+events = await readEvents(res)
+await sleep(200)
+log = lastLog('smoke-gw-req-3')
+check('上游没给 usage：completed 不带 usage，记账标估算', !events.at(-1).response.usage && log?.estimated === 1 && log.output_tokens > 0, log)
+
+// ---------------------------------------------------------------------------
+console.log('\n/v1/responses → 原生 Responses 上游（透传）')
+
+res = await gw('/v1/responses', key, { model: 'smoke-gw-native', input: '你好', stream: true, store: false, metadata: { a: 1 } }, { 'X-Request-Id': 'smoke-gw-req-4' })
+events = await readEvents(res)
+upstreamReq = await mockLast()
+check('转发到上游的 /responses，去掉 store 和 metadata', upstreamReq.path === '/responses' && !('store' in upstreamReq.body) && !('metadata' in upstreamReq.body), upstreamReq)
+check('原样透传事件', events.map((e) => e.delta ?? '').join('') === '原生回答', events)
+await sleep(200)
+log = lastLog('smoke-gw-req-4')
+check('记账：11 / 7', log?.input_tokens === 11 && log.output_tokens === 7, log)
+
+// ---------------------------------------------------------------------------
+console.log('\n/v1/chat/completions')
+
+res = await gw('/v1/chat/completions', key, { model: 'smoke-gw-chat', messages: [{ role: 'user', content: '你好' }], stream: true }, { 'X-Request-Id': 'smoke-gw-req-5' })
+events = await readEvents(res)
+upstreamReq = await mockLast()
+check('直接转发 Chat 请求并要求 usage', upstreamReq.body.model === 'normal' && upstreamReq.body.stream_options?.include_usage, upstreamReq.body)
+check('返回 Chat 的 chunk', events[0]?.object === 'chat.completion.chunk', events[0])
+await sleep(200)
+log = lastLog('smoke-gw-req-5')
+check('记账：10 / 5', log?.input_tokens === 10 && log.output_tokens === 5, log)
+
+// ---------------------------------------------------------------------------
+console.log('\n上游出错')
+
+const beforeError = tokenUsed(token.id)
+res = await gw('/v1/responses', key, { model: 'smoke-gw-error', input: 'hi' }, { 'X-Request-Id': 'smoke-gw-req-6' })
+json = await res.json()
+check('上游 500 → 502 upstream_error，不透出上游细节', res.status === 502 && json.error?.type === 'upstream_error' && !JSON.stringify(json).includes('exploded'), json)
+log = lastLog('smoke-gw-req-6')
+check('记录错误、不扣额度', log?.status_code === 500 && log.error.includes('exploded') && tokenUsed(token.id) === beforeError, log)
+
+// ---------------------------------------------------------------------------
+console.log('\n调用方中途断开')
+
+const { abortedStreams: abortedBefore } = await (await fetch(`${MOCK}/_stats`)).json()
+const controller = new AbortController()
+res = await gw('/v1/responses', key, { model: 'smoke-gw-slow', input: '慢慢说', stream: true }, { 'X-Request-Id': 'smoke-gw-req-7' })
+const reader = res.body.getReader()
+let received = ''
+while (!received.includes('片段2')) {
+  const { value } = await reader.read()
+  received += new TextDecoder().decode(value)
+}
+await reader.cancel()
+controller.abort()
+await sleep(800)
+const { abortedStreams } = await (await fetch(`${MOCK}/_stats`)).json()
+check('上游连接被立即中止', abortedStreams === abortedBefore + 1, { abortedBefore, abortedStreams })
+log = lastLog('smoke-gw-req-7')
+check('记为 499，按已收到的输出估算', log?.status_code === 499 && log.estimated === 1 && log.output_tokens > 0, log)
+check('估算的输出远小于完整 50 段', log && log.output_tokens < 30, log?.output_tokens)
+
+// ---------------------------------------------------------------------------
+console.log('\n并发和额度')
+
+const before = tokenUsed(token.id)
+const N = 20
+const results = await Promise.all(
+  Array.from({ length: N }, () => gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' }).then((r) => r.status))
+)
+check(`${N} 个并发请求都成功`, results.every((s) => s === 200), results)
+check(`令牌已用量正好增加 ${N} × 15`, tokenUsed(token.id) - before === N * 15, tokenUsed(token.id) - before)
+
+const small = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-small', remain_quota: 20, expired_time: -1, model_limits: 'smoke-gw-chat' })
+const statuses = []
+for (let i = 0; i < 3; i++) statuses.push((await gw('/v1/responses', small.key, { model: 'smoke-gw-chat', input: 'hi' })).status)
+check('额度 20：前两次放行（不预占），第三次 429', JSON.stringify(statuses) === '[200,200,429]', statuses)
+res = await gw('/v1/responses', small.key, { model: 'smoke-gw-chat', input: 'hi' })
+json = await res.json()
+check('429 的错误类型是 insufficient_quota', json.error?.type === 'insufficient_quota', json)
+
+await admin('PUT', '/api/user', { id: app.id, quota: 1 })
+res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' })
+json = await res.json()
+check('应用额度用尽 429 app_quota_exhausted', res.status === 429 && json.error?.code === 'app_quota_exhausted', json)
+await admin('PUT', '/api/user', { id: app.id, quota: 0 })
+
+await admin('PUT', '/api/token/?status_only=true', { id: token.id, status: 2 })
+res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' })
+check('禁用的令牌 401', res.status === 401, res.status)
+
+const ipToken = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-ip', unlimited_quota: true, expired_time: -1, model_limits: 'smoke-gw-chat', allow_ips: '10.0.0.0/8' })
+res = await gw('/v1/models', ipToken.key)
+check('来源 IP 不在白名单 401', res.status === 401, res.status)
+
+const app2 = await admin('GET', `/api/user/${app.id}`)
+check('应用的请求次数只计成功的请求', app2.request_count > 0, app2.request_count)
+
+// ---------------------------------------------------------------------------
+console.log('\n清理')
+db.exec("DELETE FROM usage_logs WHERE app_slug = 'smoke-gw'")
+await admin('DELETE', `/api/user/${app.id}`)
+await admin('POST', '/api/channel/batch', { ids: [chatUp.id, nativeUp.id, offUp.id] })
+console.log('已删除测试数据')
+
+console.log(failed ? `\n${failed} 项失败` : '\n全部通过')
+process.exit(failed ? 1 : 0)
