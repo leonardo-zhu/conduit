@@ -26,15 +26,17 @@ import { DEFAULT_EXPIRY_DAYS } from '../constants'
 import type { ApiKey } from '../types'
 import type { RevealedKey } from './token-key-dialog'
 
+// 按时长从短到长排，“永不过期”放最后
 const EXPIRY_PRESETS = [
-  { label: 'Never', days: 0 },
-  { label: '30 days', days: 30 },
-  { label: '90 days', days: 90 },
-  { label: '1 year', days: 365 },
+  { label: '1 hour', hours: 1 },
+  { label: '1 day', hours: 24 },
+  { label: '7 days', hours: 7 * 24 },
+  { label: '30 days', hours: 30 * 24 },
+  { label: 'Never', hours: 0 },
 ] as const
 
-function daysFromNow(days: number) {
-  return dayjs().add(days, 'day').toDate()
+function hoursFromNow(hours: number) {
+  return dayjs().add(hours, 'hour').toDate()
 }
 
 export function KeyFormDialog(props: {
@@ -63,7 +65,7 @@ export function KeyFormDialog(props: {
       setAllowIps(apiKey.allow_ips ?? '')
     } else {
       setName(props.appSlug ? `${props.appSlug}-` : '')
-      setExpiresAt(daysFromNow(DEFAULT_EXPIRY_DAYS))
+      setExpiresAt(hoursFromNow(DEFAULT_EXPIRY_DAYS * 24))
       setAllowIps('')
     }
   }, [open, apiKey, props.appSlug])
@@ -154,7 +156,7 @@ export function KeyFormDialog(props: {
                   type='button'
                   variant='outline'
                   size='sm'
-                  onClick={() => setExpiresAt(preset.days ? daysFromNow(preset.days) : null)}
+                  onClick={() => setExpiresAt(preset.hours ? hoursFromNow(preset.hours) : null)}
                 >
                   {t(preset.label)}
                 </Button>

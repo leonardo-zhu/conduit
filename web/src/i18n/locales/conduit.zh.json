@@ -160,5 +160,8 @@
   "Key name": "密钥名称",
   "No enabled providers to test": "没有启用的服务商可以测试",
   "All {{count}} providers passed": "{{count}} 个服务商都测试通过",
-  "{{failed}} of {{count}} providers failed": "{{count}} 个服务商中 {{failed}} 个测试失败"
+  "{{failed}} of {{count}} providers failed": "{{count}} 个服务商中 {{failed}} 个测试失败",
+  "7 days": "7 天",
+  "1 hour": "1 小时",
+  "1 day": "1 天"
 }
