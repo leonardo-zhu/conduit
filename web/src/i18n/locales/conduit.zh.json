@@ -125,7 +125,6 @@
   "Calls to /v1/responses are rejected with a hint to use /v1/chat/completions": "调用 /v1/responses 会被拒绝，并提示改用 /v1/chat/completions",
   "The gateway converts to and from Chat Completions. Only function tools are kept; reasoning parameters and built-in tools such as search are dropped.": "网关在 Chat Completions 和 Responses 之间转换。只保留函数类工具，推理参数和搜索等内置工具会被去掉。",
   "The upstream has /responses at the OpenAI-compatible address; requests are forwarded as-is": "上游在 OpenAI 兼容地址下有 /responses，请求直接转发",
-  "Not offered": "不提供",
   "Native": "原生支持",
   "OpenAI-compatible base URL": "OpenAI 兼容地址",
   "Always offered": "始终提供",
