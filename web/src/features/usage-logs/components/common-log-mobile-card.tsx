@@ -40,6 +40,7 @@ import {
 } from '../lib/utils'
 import { ModelBadge, ResponseModelDetails } from './model-badge'
 import { StreamTpsCell, TimingMetricsCell } from './timing-metrics-cell'
+import { useFilterLogsByApp } from '../hooks/use-filter-logs-by-app'
 import { useUsageLogsContext } from './usage-logs-provider'
 
 type FieldName =
@@ -64,6 +65,7 @@ export function CommonLogMobileCard<TData>(props: {
 }) {
   const { t } = useTranslation()
   const context = useUsageLogsContext()
+  const filterByApp = useFilterLogsByApp()
   const [selectedField, setSelectedField] = useState<FieldName | null>(null)
   const log = props.log
   const other = parseLogOther(log.other)
@@ -105,7 +107,7 @@ export function CommonLogMobileCard<TData>(props: {
       sensitive: true,
     },
     token: {
-      label: t('Token'),
+      label: t('Key'),
       value: logTokenName(log, t),
       visible: displayable && props.cells.has('token_name') && !!log.token_name,
       sensitive: true,
@@ -382,11 +384,10 @@ export function CommonLogMobileCard<TData>(props: {
                 className='min-h-11'
                 onClick={() => {
                   setSelectedField(null)
-                  context.setSelectedUserId(log.user_id)
-                  context.setUserInfoDialogOpen(true)
+                  filterByApp(log.username)
                 }}
               >
-                {t('App Information')}
+                {t('Show only this app')}
               </Button>
             )}
           </div>
