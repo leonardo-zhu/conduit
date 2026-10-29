@@ -16,7 +16,6 @@
   "App created": "App created",
   "Total quota (tokens)": "Total quota (tokens)",
   "Use lowercase letters, digits and hyphens": "Use lowercase letters, digits and hyphens",
-  "Used as the prefix of key names and aliases, e.g. vita-chat": "Used as the prefix of key names and aliases, e.g. vita-chat",
   "An app groups the keys of one client or service and shares its budget": "An app groups the keys of one client or service and shares its budget",
   "Shared by all keys of this app; each key can have its own cap": "Shared by all keys of this app; each key can have its own cap",
   "Configure an upstream provider and the model aliases it serves": "Configure a provider and the model aliases it serves",
@@ -163,5 +162,6 @@
   "{{failed}} of {{count}} providers failed": "{{failed}} of {{count}} providers failed",
   "7 days": "7 days",
   "1 hour": "1 hour",
-  "1 day": "1 day"
+  "1 day": "1 day",
+  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases"
 }

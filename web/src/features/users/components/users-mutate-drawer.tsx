@@ -224,6 +224,19 @@ export function UsersMutateDrawer({
               />
               <FormField
                 control={form.control}
+                name='display_name'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Display Name')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder='Vita' />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name='username'
                 render={({ field }) => (
                   <FormItem>
@@ -234,21 +247,8 @@ export function UsersMutateDrawer({
                     <FormDescription>
                       {isUpdate
                         ? t('The app ID cannot be changed after creation')
-                        : t('Used as the prefix of key names and aliases, e.g. vita-chat')}
+                        : t('A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases')}
                     </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='display_name'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Display Name')}</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder='Vita' />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
