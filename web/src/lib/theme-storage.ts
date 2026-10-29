@@ -25,21 +25,16 @@ export const THEME_STORAGE_KEYS = {
   contentLayout: 'newapi:theme:v1:content-layout',
 } as const
 
+/**
+ * Conduit: 去掉了主题设置面板，界面固定用默认样式、跟随系统深浅色。
+ * 不再读浏览器里以前存的偏好，否则改过的配色、字体就再也改不回来了
+ */
 export function readThemePreference<T extends string>(
-  key: string,
-  allowed: ReadonlySet<T>,
+  _key: string,
+  _allowed: ReadonlySet<T>,
   fallback: T
 ): T {
-  if (typeof window === 'undefined') return fallback
-
-  try {
-    // Legacy cookies are shared across ports, so importing them would restore
-    // preferences that may belong to another local instance.
-    const value = window.localStorage.getItem(key)
-    return value && allowed.has(value as T) ? (value as T) : fallback
-  } catch {
-    return fallback
-  }
+  return fallback
 }
 
 export function writeThemePreference(key: string, value: string | null): void {
