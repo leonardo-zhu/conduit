@@ -110,5 +110,10 @@
   "App enabled": "App enabled",
   "App disabled": "App disabled",
   "App deleted": "App deleted",
-  "Last request": "Last request"
+  "Last request": "Last request",
+  "Gateway alerts": "Gateway alerts",
+  "Upstream errors, quota usage and failure spikes": "Upstream errors, quota usage and failure spikes",
+  "Mark all as read": "Mark all as read",
+  "No alerts": "No alerts",
+  "{{count}} times": "{{count}} times"
 }
