@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { flexRender, type Row } from '@tanstack/react-table'
+import { Check, Copy } from 'lucide-react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -48,7 +49,7 @@ function ChannelCardComponent({
 }) {
   const { t } = useTranslation()
   const { sensitiveVisible } = useChannels()
-  const { copyToClipboard } = useCopyToClipboard()
+  const { copiedText, copyToClipboard } = useCopyToClipboard()
   const cells = row.getAllCells()
 
   const renderCell = (id: string) => {
@@ -97,13 +98,21 @@ function ChannelCardComponent({
                     <button
                       type='button'
                       title={t('Click to copy')}
-                      className='hover:text-foreground cursor-copy font-mono select-text'
+                      className='group/slug hover:text-foreground inline-flex items-center gap-1 font-mono select-text'
                       onClick={(e) => {
                         e.stopPropagation()
                         void copyToClipboard(row.original.slug!)
                       }}
                     >
                       {row.original.slug}
+                      {copiedText === row.original.slug ? (
+                        <Check className='size-3 text-green-600' aria-hidden />
+                      ) : (
+                        <Copy
+                          className='size-3 opacity-0 transition-opacity group-hover/slug:opacity-100'
+                          aria-hidden
+                        />
+                      )}
                     </button>
                   </>
                 )}
