@@ -111,6 +111,8 @@ function getRunwayDays(
 type HealthLevel = 'healthy' | 'caution' | 'critical'
 
 function getHealthLevel(remainQuota: number, recentUsage: number): HealthLevel {
+  // Conduit: -1 表示有应用不限额度
+  if (remainQuota === -1) return 'healthy'
   if (remainQuota <= 0) return 'critical'
   const days = getRunwayDays(remainQuota, recentUsage)
   if (days !== null && days < 3) return 'caution'
@@ -212,8 +214,11 @@ export function SummaryCards() {
   const runwayDays = getRunwayDays(remainQuota, recentUsage)
 
   const todayUsageDisplay = formatQuota(recentUsage)
+  const unlimited = remainQuota === -1
   let runwayDisplay: string
-  if (runwayDays !== null) {
+  if (unlimited) {
+    runwayDisplay = t('Unlimited')
+  } else if (runwayDays !== null) {
     if (runwayDays < 1) {
       runwayDisplay = t('Less than 1 day left')
     } else if (runwayDays > 999) {
@@ -304,7 +309,7 @@ export function SummaryCards() {
             </div>
 
             <div className='font-mono text-xl font-semibold tracking-tight sm:text-2xl'>
-              {formatQuota(remainQuota)}
+              {unlimited ? t('Unlimited') : formatQuota(remainQuota)}
             </div>
 
             <div className='grid grid-cols-2 gap-2'>
