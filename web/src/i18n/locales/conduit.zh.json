@@ -110,5 +110,10 @@
   "App enabled": "应用已启用",
   "App disabled": "应用已禁用",
   "App deleted": "应用已删除",
-  "Last request": "最近请求"
+  "Last request": "最近请求",
+  "Gateway alerts": "网关提醒",
+  "Upstream errors, quota usage and failure spikes": "上游异常、额度告急和失败率突增",
+  "Mark all as read": "全部已读",
+  "No alerts": "暂无提醒",
+  "{{count}} times": "{{count}} 次"
 }

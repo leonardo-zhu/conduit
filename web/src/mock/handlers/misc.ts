@@ -1,7 +1,5 @@
 import { mock, ok } from '../router'
 
-mock('GET', '/api/notice', () => ok(''))
-
 // NewAPI 的分组（计费倍率用），Conduit 不用，只给一个默认分组
 mock('GET', '/api/group', () => ok(['default']))
 mock('GET', '/api/user/self/groups', () => ok({ default: { desc: '默认分组', ratio: 1 } }))

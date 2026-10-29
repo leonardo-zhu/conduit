@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { LanguageSwitcher } from '@/components/language-switcher'
+import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
@@ -74,6 +76,11 @@ type AppHeaderProps = {
    */
   rightContent?: React.ReactNode
   /**
+   * Whether to show the gateway alerts bell
+   * @default true
+   */
+  showNotifications?: boolean
+  /**
    * Whether to show profile dropdown
    * @default true
    */
@@ -82,16 +89,19 @@ type AppHeaderProps = {
 
 export function AppHeader({
   navLinks = defaultTopNavLinks,
-  // Conduit: 顶部的“主页”“控制台”都进后台首页，默认不显示；通知（系统公告）和主题设置去掉了，主题跟随系统
+  // Conduit: 顶部的“主页”“控制台”都进后台首页，默认不显示；主题设置去掉了，主题跟随系统；
+  // 铃铛改为网关事件（上游异常、额度告急、错误率突增）
   showTopNav = false,
   leftContent,
   showSearch = true,
   rightContent,
+  showNotifications = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
   // Prioritize dynamically generated links from backend
   const dynamicLinks = useTopNavLinks()
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  const notifications = useNotifications()
 
   return (
     <Header>
@@ -112,6 +122,17 @@ export function AppHeader({
           )}
           {showSearch && (
             <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
+          )}
+          {showNotifications && (
+            <NotificationPopover
+              open={notifications.popoverOpen}
+              onOpenChange={notifications.setPopoverOpen}
+              unreadCount={notifications.unreadCount}
+              events={notifications.events}
+              loading={notifications.loading}
+              onMarkRead={notifications.markRead}
+              onMarkAllRead={notifications.markAllRead}
+            />
           )}
           <LanguageSwitcher />
           {showProfileDropdown && <ProfileDropdown />}

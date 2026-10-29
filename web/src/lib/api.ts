@@ -78,20 +78,39 @@ export async function getStatus() {
   return requireServerSuccess(res.data)?.data as Record<string, unknown>
 }
 
-export async function getNotice(): Promise<{
-  success: boolean
-  message?: string
-  data?: string
-}> {
-  // Drop the client's global `Cache-Control: no-store` for this public,
-  // non-user-specific payload. `no-store` forbids the browser from keeping a
-  // copy at all, so it would never hold an ETag to revalidate with and the
-  // server could never answer 304. The server sends `no-cache`, so the browser
-  // still revalidates on every request and an admin edit shows up immediately.
-  const res = await api.get('/api/notice', {
-    headers: { 'Cache-Control': null },
-  })
-  return res.data
+// Conduit: 顶栏铃铛的网关事件（上游异常、额度告急、错误率突增），替代 NewAPI 的系统公告
+export interface GatewayEvent {
+  id: number
+  kind: string
+  level: 'warning' | 'error'
+  subject_type: 'upstream' | 'app' | 'token'
+  subject_id: number
+  subject_name: string
+  title: string
+  detail: string
+  link: string
+  count: number
+  first_at: number
+  last_at: number
+  read_at: number
+}
+
+export async function getEvents() {
+  const res = await api.get('/api/events')
+  return requireServerSuccess(res.data)?.data as {
+    items: GatewayEvent[]
+    unread: number
+  }
+}
+
+export async function markEventRead(id: number) {
+  const res = await api.post(`/api/events/${id}/read`)
+  return requireServerSuccess(res.data)
+}
+
+export async function markAllEventsRead() {
+  const res = await api.post('/api/events/read_all')
+  return requireServerSuccess(res.data)
 }
 
 // ============================================================================
