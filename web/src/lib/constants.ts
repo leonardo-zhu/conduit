@@ -22,7 +22,8 @@ For commercial licensing, please contact support@quantumnous.com
 
 // System Configuration Defaults
 export const DEFAULT_SYSTEM_NAME = 'New API'
-export const DEFAULT_LOGO = '/logo.png'
+// Conduit 自己的 logo（public/logo.svg），后台没配置 logo 时用
+export const DEFAULT_LOGO = '/logo.svg'
 
 // LocalStorage Keys
 export const STORAGE_KEYS = {
