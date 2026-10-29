@@ -163,5 +163,7 @@
   "7 days": "7 days",
   "1 hour": "1 hour",
   "1 day": "1 day",
-  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases"
+  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases",
+  "Select a model": "Select a model",
+  "This provider has no models yet": "This provider has no models yet"
 }

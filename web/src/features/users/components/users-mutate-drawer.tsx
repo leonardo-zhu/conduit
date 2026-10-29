@@ -285,7 +285,15 @@ export function UsersMutateDrawer({
                     const upstream = upstreams.find(
                       (u) => u.id === aliases[index]?.upstream_id
                     )
-                    const listId = `alias-models-${item.id}`
+                    const upstreamModels = (upstream?.models ?? '')
+                      .split(',')
+                      .filter(Boolean)
+                    const currentModel = aliases[index]?.upstream_model
+                    // 已保存的模型后来从服务商的列表里删掉了，也要能显示出来
+                    const modelOptions =
+                      currentModel && !upstreamModels.includes(currentModel)
+                        ? [currentModel, ...upstreamModels]
+                        : upstreamModels
                     return (
                       <div
                         key={item.id}
@@ -324,7 +332,20 @@ export function UsersMutateDrawer({
                                 <NativeSelect
                                   className='w-full'
                                   value={String(field.value || '')}
-                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                  onChange={(e) => {
+                                    const id = Number(e.target.value)
+                                    field.onChange(id)
+                                    // 换了服务商，模型跟着换成它列表里的第一个
+                                    const models = (
+                                      upstreams.find((u) => u.id === id)?.models ?? ''
+                                    )
+                                      .split(',')
+                                      .filter(Boolean)
+                                    form.setValue(
+                                      `aliases.${index}.upstream_model`,
+                                      models[0] ?? ''
+                                    )
+                                  }}
                                 >
                                   <NativeSelectOption value=''>
                                     {t('Select an upstream')}
@@ -346,18 +367,26 @@ export function UsersMutateDrawer({
                           render={({ field }) => (
                             <FormItem className='col-span-2 sm:col-span-1'>
                               <FormLabel className='text-xs'>{t('Upstream model')}</FormLabel>
+                              {/* 从服务商填的模型列表里选；列表在服务商抽屉里维护 */}
                               <FormControl>
-                                <Input {...field} list={listId} autoComplete='off' />
-                              </FormControl>
-                              {/* 候选项取自上游里填的模型列表，也可以直接输入 */}
-                              <datalist id={listId}>
-                                {(upstream?.models ?? '')
-                                  .split(',')
-                                  .filter(Boolean)
-                                  .map((m) => (
-                                    <option key={m} value={m} />
+                                <NativeSelect
+                                  className='w-full'
+                                  value={field.value}
+                                  onChange={(e) => field.onChange(e.target.value)}
+                                  disabled={!upstream}
+                                >
+                                  <NativeSelectOption value=''>
+                                    {upstream && modelOptions.length === 0
+                                      ? t('This provider has no models yet')
+                                      : t('Select a model')}
+                                  </NativeSelectOption>
+                                  {modelOptions.map((m) => (
+                                    <NativeSelectOption key={m} value={m}>
+                                      {m}
+                                    </NativeSelectOption>
                                   ))}
-                              </datalist>
+                                </NativeSelect>
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -375,13 +404,14 @@ export function UsersMutateDrawer({
                     variant='outline'
                     size='sm'
                     disabled={upstreams.length === 0}
-                    onClick={() =>
+                    onClick={() => {
+                      const only = upstreams.length === 1 ? upstreams[0] : undefined
                       aliasFields.append({
                         name: slug ? `${slug}-` : '',
-                        upstream_id: upstreams.length === 1 ? upstreams[0].id : 0,
-                        upstream_model: '',
+                        upstream_id: only?.id ?? 0,
+                        upstream_model: only?.models.split(',').find(Boolean) ?? '',
                       })
-                    }
+                    }}
                   >
                     <Plus className='size-4' />
                     {t('Add alias')}
