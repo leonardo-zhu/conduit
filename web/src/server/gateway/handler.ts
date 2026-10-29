@@ -17,8 +17,9 @@ import { randomUUID } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 
 import { listAliases } from '../api/apps'
-import { upstreamKey } from '../api/upstreams'
+import { listEnabledUpstreams, upstreamKey } from '../api/upstreams'
 import { clientIp } from '../auth'
+import { parseJsonArray } from '../db'
 import { authenticate, checkQuota, resolveAlias, type GatewayAuth, type RouteTarget } from './context'
 import { errorResponse, GatewayError } from './errors'
 import { recordUsage, estimateTokens } from './record'
@@ -70,7 +71,7 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
       throw new GatewayError(
         'invalid_request_error',
         'messages_not_supported',
-        `模型别名 ${target.alias} 的服务商不提供 Anthropic Messages，请改用 /v1/chat/completions`
+        `模型 ${target.alias} 的服务商不提供 Anthropic Messages，请改用 /v1/chat/completions`
       )
     }
     // 各家对 Anthropic 接口的鉴权头不统一，x-api-key 和 Bearer 都带上
@@ -92,7 +93,7 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
   throw new GatewayError(
     'invalid_request_error',
     'responses_not_supported',
-    `模型别名 ${target.alias} 的服务商不提供 Responses API，请改用 /v1/chat/completions`
+    `模型 ${target.alias} 的服务商不提供 Responses API，请改用 /v1/chat/completions`
   )
 }
 
@@ -288,16 +289,19 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
   }
 }
 
-/** GET /v1/models：令牌所属应用的全部别名 */
+/** GET /v1/models：令牌所属应用的全部别名，加上启用的服务商模型列表里的“标识/模型名” */
 export function handleModels(req: NextRequest): Response {
   const requestId = requestIdOf(req)
   try {
     const auth = authenticate(req.headers, clientIp(req))
-    const aliases = listAliases(auth.app.id)
+    const ids = [
+      ...listAliases(auth.app.id).map((a) => a.name),
+      ...listEnabledUpstreams().flatMap((u) => parseJsonArray(u.models).map((m) => `${u.slug}/${m}`)),
+    ]
     return Response.json(
       {
         object: 'list',
-        data: aliases.map((a) => ({ id: a.name, object: 'model', created: auth.app.created_at, owned_by: 'conduit' })),
+        data: ids.map((id) => ({ id, object: 'model', created: auth.app.created_at, owned_by: 'conduit' })),
       },
       { headers: { 'X-Request-Id': requestId } }
     )

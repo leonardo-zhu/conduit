@@ -40,6 +40,7 @@ await call('POST', '/api/user/login', { username: USERNAME, password: PASSWORD }
 const ark = await call('POST', '/api/channel', {
   channel: {
     name: 'Ark Agent Plan',
+    slug: 'ark',
     responses_mode: 'native',
     base_url: 'https://ark.cn-beijing.volces.com/api/plan/v3',
     key: 'fake-ark-key-0000',
@@ -47,11 +48,12 @@ const ark = await call('POST', '/api/channel', {
   },
 })
 const minimax = await call('POST', '/api/channel', {
-  channel: { name: 'MiniMax', responses_mode: 'convert', base_url: 'https://api.minimaxi.com/v1', key: 'fake-minimax-key-0000', models: 'MiniMax-M2' },
+  channel: { name: 'MiniMax', slug: 'minimax', responses_mode: 'convert', base_url: 'https://api.minimaxi.com/v1', key: 'fake-minimax-key-0000', models: 'MiniMax-M2' },
 })
 const nous = await call('POST', '/api/channel', {
   channel: {
     name: 'Nous',
+    slug: 'nous',
     responses_mode: 'convert',
     base_url: 'https://inference-api.nousresearch.com/v1',
     key: 'fake-nous-key-0000',

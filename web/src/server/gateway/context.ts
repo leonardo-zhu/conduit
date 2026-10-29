@@ -3,7 +3,7 @@
  */
 import { rolloverAppPeriods, type AppRow } from '../api/apps'
 import { effectiveTokenStatus, TOKEN_STATUS, type TokenRow } from '../api/tokens'
-import { getUpstream, type UpstreamRow } from '../api/upstreams'
+import { getUpstream, getUpstreamBySlug, type UpstreamRow } from '../api/upstreams'
 import { hashTokenKey } from '../crypto'
 import { db } from '../db'
 import { noteQuotaRejected } from './alerts'
@@ -52,11 +52,18 @@ export function authenticate(headers: Headers, ip: string): GatewayAuth {
   return { token, app }
 }
 
-/** 别名必须是令牌所属应用的别名 */
+/**
+ * model 有两种写法：
+ * - 别名（不含 /）：必须是令牌所属应用的别名
+ * - “服务商标识/模型名”：不用配别名，直接发给这个服务商，模型名原样转发（不要求在服务商的模型列表里）
+ */
 export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
   if (typeof model !== 'string' || !model) {
-    throw new GatewayError('invalid_request_error', 'missing_model', '请求里缺少 model（模型别名）')
+    throw new GatewayError('invalid_request_error', 'missing_model', '请求里缺少 model（模型别名或 服务商标识/模型名）')
   }
+  const slash = model.indexOf('/')
+  if (slash > 0) return resolveDirect(model, model.slice(0, slash), model.slice(slash + 1))
+
   const notFound = new GatewayError(
     'invalid_request_error',
     'model_not_found',
@@ -73,6 +80,17 @@ export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
     throw new GatewayError('upstream_unavailable', 'upstream_disabled', `模型别名 ${model} 的服务商已停用`)
   }
   return { alias: model, upstream, upstreamModel: alias.upstream_model }
+}
+
+function resolveDirect(model: string, slug: string, upstreamModel: string): RouteTarget {
+  const upstream = getUpstreamBySlug(slug)
+  if (!upstream || !upstreamModel) {
+    throw new GatewayError('invalid_request_error', 'model_not_found', `没有标识为 ${slug} 的服务商，或没写模型名`)
+  }
+  if (upstream.status !== 1) {
+    throw new GatewayError('upstream_unavailable', 'upstream_disabled', `服务商 ${slug} 已停用`)
+  }
+  return { alias: model, upstream, upstreamModel }
 }
 
 /** 请求前检查应用还有余额；不预占，请求结束后按实际用量扣 */

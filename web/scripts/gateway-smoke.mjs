@@ -79,10 +79,10 @@ try {
 db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
-const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
-const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, anthropic_base_url: `${MOCK_FOR_GATEWAY}/anthropic/`, key: 'mock-native-key' } })
-const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
-const chatOnlyUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chatonly', base_url: MOCK_FOR_GATEWAY, key: 'mock-chatonly-key' } })
+const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', slug: 'smoke-gw-chat', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', slug: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, anthropic_base_url: `${MOCK_FOR_GATEWAY}/anthropic/`, key: 'mock-native-key' } })
+const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', slug: 'smoke-gw-off', models: 'normal', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
+const chatOnlyUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chatonly', slug: 'smoke-gw-chatonly', models: 'normal', base_url: MOCK_FOR_GATEWAY, key: 'mock-chatonly-key' } })
 check('按指定的 Responses 方式保存', nativeUp.responses_mode === 'native', nativeUp.responses_mode)
 check('新建上游默认不提供 Responses', chatOnlyUp.responses_mode === 'none', chatOnlyUp.responses_mode)
 check('Anthropic 地址去掉结尾斜杠', nativeUp.anthropic_base_url === `${MOCK_FOR_GATEWAY}/anthropic`, nativeUp.anthropic_base_url)
@@ -117,7 +117,13 @@ check('令牌不对 401', res.status === 401, res.status)
 
 res = await gw('/v1/models', key)
 json = await res.json()
-check('模型列表是应用的全部别名', json.data?.length === 9 && json.data.some((m) => m.id === 'smoke-gw-hidden'), json)
+check(
+  '模型列表是应用的全部别名加上启用服务商的 标识/模型名',
+  json.data?.some((m) => m.id === 'smoke-gw-hidden') &&
+    json.data.some((m) => m.id === 'smoke-gw-chatonly/normal') &&
+    !json.data.some((m) => m.id === 'smoke-gw-off/normal'),
+  json
+)
 
 res = await gw('/v1/responses', key, { model: 'smoke-gw-missing', input: 'hi' })
 json = await res.json()
@@ -132,6 +138,17 @@ check('上游不提供 Responses 时 /v1/responses 400', res.status === 400 && j
 
 res = await gw('/v1/chat/completions', key, { model: 'smoke-gw-chatonly', messages: [{ role: 'user', content: 'hi' }] })
 check('同一个上游的 /v1/chat/completions 照常可用', res.status === 200, res.status)
+
+res = await gw('/v1/chat/completions', key, { model: 'smoke-gw-chatonly/normal', messages: [{ role: 'user', content: 'hi' }] })
+json = await res.json()
+check('不配别名，用 标识/模型名 直接调用', res.status === 200 && lastLog(res.headers.get('x-request-id'))?.alias === 'smoke-gw-chatonly/normal', json)
+
+res = await gw('/v1/chat/completions', key, { model: 'no-such-provider/normal', messages: [{ role: 'user', content: 'hi' }] })
+json = await res.json()
+check('标识不存在 400 model_not_found', res.status === 400 && json.error?.code === 'model_not_found', json)
+
+res = await gw('/v1/chat/completions', key, { model: 'smoke-gw-off/normal', messages: [{ role: 'user', content: 'hi' }] })
+check('直接调用停用的服务商 503', res.status === 503, res.status)
 
 res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi', previous_response_id: 'resp_x' })
 json = await res.json()

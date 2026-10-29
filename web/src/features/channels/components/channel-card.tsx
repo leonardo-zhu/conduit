@@ -88,6 +88,9 @@ function ChannelCardComponent({
             <div className='min-w-0 overflow-hidden text-sm'>
               <div className={labelClass}>
                 #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
+                {row.original.slug && (
+                  <span className='font-mono'> · {row.original.slug}</span>
+                )}
               </div>
               {nameCell}
             </div>

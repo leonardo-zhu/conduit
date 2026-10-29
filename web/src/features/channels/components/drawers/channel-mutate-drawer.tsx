@@ -90,6 +90,10 @@ const RESPONSES_KINDS: ResponsesKind[] = ['native', 'convert']
 function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
+    slug: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9._-]*$/, t('Use lowercase letters, digits and . _ -')),
     responses_enabled: z.boolean(),
     responses_kind: z.enum(['native', 'convert']),
     anthropic_base_url: z
@@ -112,6 +116,7 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 
 const EMPTY_VALUES: FormValues = {
   name: '',
+  slug: '',
   // 新建默认只有 Chat Completions；打开 Responses 时默认原生支持
   responses_enabled: false,
   responses_kind: 'native',
@@ -127,6 +132,7 @@ const EMPTY_VALUES: FormValues = {
 function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
+    slug: channel.slug ?? '',
     responses_enabled: (channel.responses_mode ?? 'none') !== 'none',
     responses_kind: channel.responses_mode === 'convert' ? 'convert' : 'native',
     anthropic_base_url: channel.anthropic_base_url ?? '',
@@ -142,6 +148,7 @@ function toFormValues(channel: Channel): FormValues {
 function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
+    slug: values.slug,
     responses_mode: values.responses_enabled ? values.responses_kind : 'none',
     anthropic_base_url: values.anthropic_base_url.replace(/\/+$/, ''),
     base_url: values.base_url.replace(/\/+$/, '') || null,
@@ -279,6 +286,22 @@ export function ChannelMutateDrawer({
                     <FormControl>
                       <Input {...field} placeholder={t('e.g. Main upstream')} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='slug'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Provider ID')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder='minimax' autoComplete='off' />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.')}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

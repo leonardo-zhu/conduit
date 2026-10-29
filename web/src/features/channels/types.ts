@@ -47,6 +47,8 @@ export const channelSchema = z.object({
   anthropic_base_url: z.string().optional(),
   status: z.number(), // 1: enabled, 0: manual disabled, 2: auto disabled
   name: z.string(),
+  // Conduit: 服务商标识，直接调用时写成“标识/模型名”
+  slug: z.string().optional(),
   weight: z.number().nullish(),
   created_time: z.number(),
   test_time: z.number(),
