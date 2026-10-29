@@ -21,9 +21,9 @@ function telegramConfig() {
 }
 
 const KIND_LABEL: Record<EventKind, string> = {
-  upstream_auth: '上游拒绝密钥',
-  upstream_rate_limit: '上游限流',
-  upstream_failing: '上游连续失败',
+  upstream_auth: '服务商拒绝密钥',
+  upstream_rate_limit: '服务商限流',
+  upstream_failing: '服务商连续失败',
   quota_warning: '额度将尽',
   quota_exhausted: '额度用尽',
   error_rate: '错误率突增',
@@ -66,7 +66,7 @@ export function messageFor(event: EventInput): string {
     if (event.detail) lines.push(escapeHtml(event.detail))
   }
   if (event.raw?.trim()) {
-    lines.push('', '<b>上游返回</b>', `<pre>${escapeHtml(formatRaw(event.raw))}</pre>`)
+    lines.push('', '<b>服务商返回</b>', `<pre>${escapeHtml(formatRaw(event.raw))}</pre>`)
   }
   // PASSKEY_ORIGIN 就是后台地址，生产环境必填
   const origin = process.env.PASSKEY_ORIGIN?.replace(/\/+$/, '')

@@ -75,10 +75,10 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
       ...base,
       kind: 'upstream_auth',
       level: 'error',
-      title: `上游 ${upstream.name} 拒绝了密钥（${statusCode}）`,
+      title: `服务商 ${upstream.name} 拒绝了密钥（${statusCode}）`,
       detail: `密钥可能失效、欠费或没有这个模型的权限。${error}`.slice(0, 500),
       link: '/channels',
-      fields: [['上游', upstream.name], ['状态码', String(statusCode)], trigger, ['可能原因', '密钥失效、欠费或没有这个模型的权限']],
+      fields: [['服务商', upstream.name], ['状态码', String(statusCode)], trigger, ['可能原因', '密钥失效、欠费或没有这个模型的权限']],
       raw: upstreamBody(error),
     })
     return
@@ -88,10 +88,10 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
       ...base,
       kind: 'upstream_rate_limit',
       level: 'warning',
-      title: `上游 ${upstream.name} 限流（429）`,
+      title: `服务商 ${upstream.name} 限流（429）`,
       detail: error.slice(0, 500),
       link: logsLink({ channel: upstream.id }),
-      fields: [['上游', upstream.name], ['状态码', '429'], trigger],
+      fields: [['服务商', upstream.name], ['状态码', '429'], trigger],
       raw: upstreamBody(error),
     })
     return
@@ -104,10 +104,10 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
         ...base,
         kind: 'upstream_failing',
         level: 'error',
-        title: `上游 ${upstream.name} 连续 ${streak} 次失败`,
+        title: `服务商 ${upstream.name} 连续 ${streak} 次失败`,
         detail: `最近一次：${error}`.slice(0, 500),
         link: logsLink({ channel: upstream.id }),
-        fields: [['上游', upstream.name], ['连续失败', `${streak} 次`], ['状态码', String(statusCode)], trigger],
+        fields: [['服务商', upstream.name], ['连续失败', `${streak} 次`], ['状态码', String(statusCode)], trigger],
         raw: upstreamBody(error),
       })
     }
@@ -225,12 +225,12 @@ function checkErrorRate(auth: GatewayAuth) {
     subjectId: auth.app.id,
     subjectName: auth.app.slug,
     title: `应用 ${auth.app.slug} 的请求大量失败`,
-    detail: `最近 10 分钟 ${stats.total} 个请求，${stats.failed} 个因上游问题失败`,
+    detail: `最近 10 分钟 ${stats.total} 个请求，${stats.failed} 个因服务商问题失败`,
     link: logsLink({ username: auth.app.slug }),
     fields: [
       ['应用', auth.app.slug],
       ['最近 10 分钟', `${stats.total} 个请求`],
-      ['上游类失败', `${stats.failed} 个（${percent(stats.failed, stats.total)}）`],
+      ['服务商类失败', `${stats.failed} 个（${percent(stats.failed, stats.total)}）`],
     ],
   })
 }

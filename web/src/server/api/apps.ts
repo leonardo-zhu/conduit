@@ -227,7 +227,7 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
     const upstreamModel = typeof item?.upstream_model === 'string' ? item.upstream_model.trim() : ''
     const upstreamId = Number(item?.upstream_id)
     if (!ALIAS_PATTERN.test(name)) return fail(`别名“${name}”不合法：只能用小写字母、数字和 . _ -`)
-    if (!upstreamModel) return fail(`别名“${name}”没有填上游模型`)
+    if (!upstreamModel) return fail(`别名“${name}”没有填服务商模型`)
     if (aliases.some((a) => a.name === name)) return fail(`别名“${name}”重复`)
     aliases.push({ name, upstream_id: upstreamId, upstream_model: upstreamModel })
   }
@@ -253,7 +253,7 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
       for (const a of aliases) insert.run(app.id, a.name, a.upstream_id, a.upstream_model)
     })
   } catch (e) {
-    if (isForeignKeyViolation(e)) return fail('选择的上游不存在')
+    if (isForeignKeyViolation(e)) return fail('选择的服务商不存在')
     throw e
   }
   return ok(listAliases(app.id))

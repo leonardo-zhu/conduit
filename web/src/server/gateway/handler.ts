@@ -71,7 +71,7 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
       throw new GatewayError(
         'invalid_request_error',
         'messages_not_supported',
-        `模型别名 ${target.alias} 的上游不提供 Anthropic Messages，请改用 /v1/chat/completions`
+        `模型别名 ${target.alias} 的服务商不提供 Anthropic Messages，请改用 /v1/chat/completions`
       )
     }
     // 各家对 Anthropic 接口的鉴权头不统一，x-api-key 和 Bearer 都带上
@@ -93,7 +93,7 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
   throw new GatewayError(
     'invalid_request_error',
     'responses_not_supported',
-    `模型别名 ${target.alias} 的上游不提供 Responses API，请改用 /v1/chat/completions`
+    `模型别名 ${target.alias} 的服务商不提供 Responses API，请改用 /v1/chat/completions`
   )
 }
 
@@ -104,12 +104,12 @@ function requestChars(body: Body): number {
 }
 
 function upstreamErrorFor(status: number, text: string): GatewayError {
-  const detail = `上游返回 ${status}：${text.slice(0, 300)}`
+  const detail = `服务商返回 ${status}：${text.slice(0, 300)}`
   // 参数类错误多半是请求本身的问题，转成 400 让调用方知道；鉴权、限流、5xx 都是上游的问题
   if ([400, 404, 413, 422].includes(status)) {
-    return new GatewayError('invalid_request_error', 'upstream_rejected', `上游拒绝了请求（${status}）`, detail)
+    return new GatewayError('invalid_request_error', 'upstream_rejected', `服务商拒绝了请求（${status}）`, detail)
   }
-  return new GatewayError('upstream_error', 'upstream_error', `上游出错（${status}）`, detail)
+  return new GatewayError('upstream_error', 'upstream_error', `服务商出错（${status}）`, detail)
 }
 
 export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promise<Response> {
@@ -193,14 +193,14 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
       clearTimeout(timer)
       req.signal.removeEventListener('abort', onClientAbort)
       if (req.signal.aborted) {
-        record({ statusCode: 499, error: '调用方在上游响应前断开' })
+        record({ statusCode: 499, error: '调用方在服务商响应前断开' })
         return new Response(null, { status: 499 })
       }
       const timedOut = upstream.signal.aborted
-      record({ statusCode: timedOut ? 504 : 502, error: timedOut ? '等待上游响应超时' : `连接上游失败：${String(error)}` })
+      record({ statusCode: timedOut ? 504 : 502, error: timedOut ? '等待服务商响应超时' : `连接服务商失败：${String(error)}` })
       throw timedOut
-        ? new GatewayError('upstream_timeout', 'upstream_timeout', '上游响应超时')
-        : new GatewayError('upstream_error', 'upstream_unreachable', '连接上游失败', String(error))
+        ? new GatewayError('upstream_timeout', 'upstream_timeout', '服务商响应超时')
+        : new GatewayError('upstream_error', 'upstream_unreachable', '连接服务商失败', String(error))
     }
 
     if (!res.ok) {
@@ -251,11 +251,11 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
       json = (await res.json()) as Body
     } catch (error) {
       if (req.signal.aborted) {
-        record({ statusCode: 499, error: '调用方在上游响应前断开' })
+        record({ statusCode: 499, error: '调用方在服务商响应前断开' })
         return new Response(null, { status: 499 })
       }
-      record({ statusCode: 502, error: `上游返回的不是 JSON：${String(error)}` })
-      throw new GatewayError('upstream_error', 'invalid_upstream_response', '上游返回的内容无法解析')
+      record({ statusCode: 502, error: `服务商返回的不是 JSON：${String(error)}` })
+      throw new GatewayError('upstream_error', 'invalid_upstream_response', '服务商返回的内容无法解析')
     } finally {
       clearTimeout(timer)
       req.signal.removeEventListener('abort', onClientAbort)
