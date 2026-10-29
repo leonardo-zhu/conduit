@@ -81,31 +81,32 @@ export function checkCredentials(username: string, password: string): boolean {
   return safeEqual(username, config.username) && passwordOk
 }
 
-// ---------------------------------------------------------------------------
-// 会话 cookie：base64url(JSON{sid, iat, exp}).hmac
-// ---------------------------------------------------------------------------
-
-interface SessionPayload {
-  sid: string
-  iat: number
-  exp: number
+/** 已登录后的二次确认（如注册 Passkey）只校验密码 */
+export function checkPassword(password: string): boolean {
+  return verifyPassword(password, getConfig().passwordHash)
 }
+
+export function adminUsername(): string {
+  return getConfig().username
+}
+
+// ---------------------------------------------------------------------------
+// 签名令牌：base64url(JSON).hmac，用 SESSION_SECRET 签名。
+// 会话 cookie 和 Passkey 的 flow token 都用它，靠 kind 区分，不能互相冒用
+// ---------------------------------------------------------------------------
 
 function sign(data: string, secret: string) {
   return createHmac('sha256', secret).update(data).digest('base64url')
 }
 
-export function createSession(): { token: string; payload: SessionPayload } {
+export function signToken<T extends { exp: number }>(kind: string, payload: T): string {
   const { secret } = getConfig()
-  const now = Math.floor(Date.now() / 1000)
-  const payload = { sid: randomUUID(), iat: now, exp: now + SESSION_TTL_SECONDS }
-  const data = Buffer.from(JSON.stringify(payload)).toString('base64url')
-  return { token: `${data}.${sign(data, secret)}`, payload }
+  const data = Buffer.from(JSON.stringify({ ...payload, kind })).toString('base64url')
+  return `${data}.${sign(data, secret)}`
 }
 
-export function readSession(req: NextRequest): SessionPayload | null {
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  if (!token) return null
+/** 签名不对、kind 不符或已过期都返回 null */
+export function verifyToken<T extends { exp: number }>(kind: string, token: string): T | null {
   let config: AuthConfig
   try {
     config = getConfig()
@@ -115,12 +116,40 @@ export function readSession(req: NextRequest): SessionPayload | null {
   const [data, mac] = token.split('.')
   if (!data || !mac || !safeEqual(mac, sign(data, config.secret))) return null
   try {
-    const payload = JSON.parse(Buffer.from(data, 'base64url').toString()) as SessionPayload
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString()) as T & { kind?: string }
+    if (payload.kind !== kind) return null
     if (payload.exp <= Math.floor(Date.now() / 1000)) return null
     return payload
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------------------
+// 会话 cookie
+// ---------------------------------------------------------------------------
+
+export type LoginMethod = 'password' | 'passkey'
+
+export interface SessionPayload {
+  sid: string
+  iat: number
+  exp: number
+  method?: LoginMethod
+}
+
+export function createSession(method: LoginMethod = 'password'): {
+  token: string
+  payload: SessionPayload
+} {
+  const now = Math.floor(Date.now() / 1000)
+  const payload = { sid: randomUUID(), iat: now, exp: now + SESSION_TTL_SECONDS, method }
+  return { token: signToken('session', payload), payload }
+}
+
+export function readSession(req: NextRequest): SessionPayload | null {
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  return token ? verifyToken<SessionPayload>('session', token) : null
 }
 
 export function sessionCookies(token: string): string[] {
@@ -153,7 +182,7 @@ export function authBundle(session: SessionPayload) {
     session: {
       sid: session.sid,
       current: true,
-      login_method: 'password',
+      login_method: session.method ?? 'password',
       ip: '',
       user_agent: '',
       created_at: session.iat,
