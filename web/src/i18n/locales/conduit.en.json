@@ -146,5 +146,8 @@
   "Licensed under AGPL-3.0-or-later. Source code:": "Licensed under AGPL-3.0-or-later. Source code:",
   "Provider ID": "Provider ID",
   "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.": "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.",
-  "Follow system": "Follow system"
+  "Follow system": "Follow system",
+  "Usage / Quota": "Usage / Quota",
+  "Used this month": "Used this month",
+  "Used in total": "Used in total"
 }

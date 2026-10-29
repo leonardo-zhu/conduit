@@ -177,7 +177,7 @@ export function useUsersColumns(): ColumnDef<User>[] {
       {
         id: 'quota',
         accessorKey: 'quota',
-        header: `${t('Available Balance')} (${quotaUnit})`,
+        header: `${t('Usage / Quota')} (${quotaUnit})`,
         cell: ({ row }) => {
           const user = row.original
           return (
