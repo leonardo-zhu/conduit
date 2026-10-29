@@ -54,8 +54,6 @@ type ChannelsContextType = {
   setCurrentTag: (tag: string | null) => void
   sorting: SortingState
   setSorting: OnChangeFn<SortingState>
-  batchMode: boolean
-  setBatchMode: (enabled: boolean) => void
   sensitiveVisible: boolean
   setSensitiveVisible: (visible: boolean) => void
   upstream: UpstreamUpdateState
@@ -81,7 +79,6 @@ export function ChannelsProvider({ children }: { children: React.ReactNode }) {
   const [sorting, setSorting] = useState<SortingState>(() => [
     { id: 'id', desc: false },
   ])
-  const [batchMode, setBatchMode] = useState(false)
   const [sensitiveVisible, setSensitiveVisible] = useState(true)
 
   const queryClient = useQueryClient()
@@ -103,8 +100,6 @@ export function ChannelsProvider({ children }: { children: React.ReactNode }) {
       setCurrentTag,
       sorting,
       setSorting,
-      batchMode,
-      setBatchMode,
       sensitiveVisible,
       setSensitiveVisible,
       upstream,
@@ -114,7 +109,6 @@ export function ChannelsProvider({ children }: { children: React.ReactNode }) {
       currentRow,
       currentTag,
       sorting,
-      batchMode,
       sensitiveVisible,
       upstream,
     ]

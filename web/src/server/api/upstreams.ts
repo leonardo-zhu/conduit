@@ -333,30 +333,48 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-// 测试：用测试模型发一个 max_tokens=1 的 Chat Completions 请求
-route('GET', '/api/channel/test/:id', async ({ params, query }: ApiRequest) => {
-  const row = getUpstream(Number(params.id))
-  if (!row) return fail('服务商不存在')
-  const model = query.get('model') || row.test_model || parseJsonArray(row.models)[0]
-  if (!model) return fail('没有可测试的模型：先在服务商里填模型列表或测试模型')
+// 测试：用测试模型发一个 max_tokens=1 的 Chat Completions 请求，成功时记下测试时间和耗时
+async function testUpstream(row: UpstreamRow, model?: string): Promise<{ ms: number } | { error: string }> {
+  const testModel = model || row.test_model || parseJsonArray(row.models)[0]
+  if (!testModel) return { error: '没有可测试的模型：先在服务商里填模型列表或测试模型' }
 
   const started = Date.now()
   try {
     const res = await callUpstream(row, '/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
+      body: JSON.stringify({ model: testModel, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
     })
-    const elapsed = Date.now() - started
+    const ms = Date.now() - started
     if (!res.ok) {
       const text = (await res.text().catch(() => '')).slice(0, 300)
-      return fail(`服务商返回 ${res.status}：${text}`)
+      return { error: `服务商返回 ${res.status}：${text}` }
     }
-    updateUpstream(row.id, { test_time: nowSeconds(), response_time: elapsed })
-    // NewAPI 的测试接口把耗时（秒）放在顶层 time 字段
-    return { body: { success: true, message: '', time: elapsed / 1000 } }
+    updateUpstream(row.id, { test_time: nowSeconds(), response_time: ms })
+    return { ms }
   } catch (error) {
-    return fail(`连接服务商失败：${describeError(error)}`)
+    return { error: `连接服务商失败：${describeError(error)}` }
   }
+}
+
+route('GET', '/api/channel/test/:id', async ({ params, query }: ApiRequest) => {
+  const row = getUpstream(Number(params.id))
+  if (!row) return fail('服务商不存在')
+  const result = await testUpstream(row, query.get('model') ?? undefined)
+  if ('error' in result) return fail(result.error)
+  // NewAPI 的测试接口把耗时（秒）放在顶层 time 字段
+  return { body: { success: true, message: '', time: result.ms / 1000 } }
+})
+
+// 测试全部启用的服务商：并发测完再返回每个的结果（服务商不多，单个最多等 20 秒）
+route('GET', '/api/channel/test', async () => {
+  const rows = listEnabledUpstreams()
+  const results = await Promise.all(
+    rows.map(async (row) => {
+      const result = await testUpstream(row)
+      return { id: row.id, name: row.name, ...('error' in result ? { error: result.error } : { time: result.ms / 1000 }) }
+    })
+  )
+  return ok(results)
 })
 
 // 拉取上游的模型列表（OpenAI 兼容的 GET /models）

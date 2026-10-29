@@ -341,18 +341,6 @@ export async function fixChannelAbilities(): Promise<{
 }
 
 /**
- * Delete all disabled channels
- */
-export async function deleteDisabledChannels(): Promise<{
-  success: boolean
-  message?: string
-  data?: number
-}> {
-  const res = await api.delete('/api/channel/disabled', channelActionConfig())
-  return res.data
-}
-
-/**
  * Get channel key (requires 2FA verification)
  */
 export async function getChannelKey(
@@ -627,6 +615,7 @@ export async function deleteOllamaModel(params: {
 export async function testAllChannels(): Promise<{
   success: boolean
   message?: string
+  data?: { id: number; name: string; time?: number; error?: string }[]
 }> {
   const res = await api.get('/api/channel/test', channelActionConfig())
   return res.data
