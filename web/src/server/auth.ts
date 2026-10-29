@@ -11,6 +11,8 @@ import { createHmac, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 
 import type { NextRequest } from 'next/server'
 
+import { db } from './db'
+
 export const SESSION_COOKIE = 'conduit_session'
 /** 前端据此判断要不要尝试恢复会话（沿用 NewAPI 前端的约定），不含任何凭据 */
 export const SESSION_HINT_COOKIE = 'new_api_has_session'
@@ -192,6 +194,11 @@ export function authBundle(session: SessionPayload) {
   }
 }
 
+/**
+ * 前端（NewAPI）的“当前用户”。概览页的余额、已用量、请求数读的是它，
+ * 管理员本身没有额度，这里换成所有应用的汇总：quota 是各应用剩余额度之和，
+ * 有启用中的应用不限额度时为 -1（前端显示“不限”）
+ */
 export function adminUser(username = getConfig().username) {
   return {
     id: ADMIN_USER_ID,
@@ -200,7 +207,24 @@ export function adminUser(username = getConfig().username) {
     role: 100, // NewAPI 前端的超级管理员
     status: 1,
     group: 'default',
+    ...usageSummary(),
   }
+}
+
+function usageSummary() {
+  const apps = db()
+    .prepare('SELECT quota, used FROM apps WHERE status = 1')
+    .all() as { quota: number; used: number }[]
+  const unlimited = apps.some((a) => a.quota === 0)
+  const remaining = apps.reduce((sum, a) => sum + Math.max(a.quota - a.used, 0), 0)
+  const totals = db()
+    .prepare(
+      `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS used,
+              COALESCE(SUM(CASE WHEN error = '' THEN 1 ELSE 0 END), 0) AS requests
+       FROM usage_logs`
+    )
+    .get() as { used: number; requests: number }
+  return { quota: unlimited ? -1 : remaining, used_quota: totals.used, request_count: totals.requests }
 }
 
 // ---------------------------------------------------------------------------
