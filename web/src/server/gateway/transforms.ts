@@ -1,6 +1,6 @@
 /**
- * Responses API ↔ Chat Completions 的协议转换，迁自 adapter/lib/transforms.ts
- * （设计说明见 adapter/CONVERSION.md）。和 adapter 版本的差别：
+ * Responses API ↔ Chat Completions 的协议转换，迁自原来的 adapter/lib/transforms.ts
+ * （adapter 已删除，设计说明 adapter/CONVERSION.md 在 git 历史里）。和 adapter 版本的差别：
  *
  * - 流式输出用 Responses API 的标准事件名（response.output_text.delta / .done），
  *   adapter 用的是非标准的 response.content_part.delta；并带上 sequence_number
