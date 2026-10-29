@@ -35,7 +35,8 @@ import type { SidebarData } from '@/components/layout/types'
  * registered in `layout/lib/sidebar-view-registry.ts`.
  *
  * Conduit: 只保留网关用得到的页面（概览、令牌、用量、渠道、用户），
- * 去掉了聊天、钱包、兑换码、订阅、系统设置等。
+ * 去掉了聊天、钱包、兑换码、订阅、系统设置等。只有一个管理员，
+ * 按用途分成“使用情况”和“配置”两组，不按角色分组。
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -43,8 +44,8 @@ export function useSidebarData(): SidebarData {
   return {
     navGroups: [
       {
-        id: 'general',
-        title: t('General'),
+        id: 'usage',
+        title: t('Usage overview'),
         items: [
           {
             title: t('Overview'),
@@ -69,8 +70,8 @@ export function useSidebarData(): SidebarData {
         ],
       },
       {
-        id: 'admin',
-        title: t('Admin'),
+        id: 'config',
+        title: t('Configuration'),
         items: [
           {
             title: t('Channels'),

@@ -130,5 +130,6 @@
   "Always offered": "始终提供",
   "Anthropic-compatible base URL": "Anthropic 兼容地址",
   "(optional)": "（选填）",
-  "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API.": "按 ANTHROPIC_BASE_URL 的写法填。调用 /v1/messages 会直接转发到 <地址>/v1/messages，不做格式转换。上游没有 Anthropic 接口就留空。"
+  "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API.": "按 ANTHROPIC_BASE_URL 的写法填。调用 /v1/messages 会直接转发到 <地址>/v1/messages，不做格式转换。上游没有 Anthropic 接口就留空。",
+  "Usage overview": "使用情况"
 }
