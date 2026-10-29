@@ -1,7 +1,2 @@
-// 注册顺序无关；每个文件按领域放一组假接口
-import './channels'
-import './dashboard'
-import './logs'
+// 还没有真实实现的 NewAPI 接口；应用、令牌、上游、日志、看板已改为 src/server/api/
 import './misc'
-import './tokens'
-import './users'
