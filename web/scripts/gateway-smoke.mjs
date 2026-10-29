@@ -79,10 +79,10 @@ try {
 db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
-const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', type: 1, protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
-const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', type: 45, base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
-const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', type: 1, base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
-check('火山方舟类型默认原生 Responses', nativeUp.protocol === 'responses', nativeUp.protocol)
+const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', protocol: 'responses', base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
+const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
+check('按指定的协议保存', nativeUp.protocol === 'responses', nativeUp.protocol)
 
 const app = await admin('POST', '/api/user', { username: 'smoke-gw', quota: 0 })
 const alias = (name, upstream, model) => ({ name, upstream_id: upstream.id, upstream_model: model })

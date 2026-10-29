@@ -49,14 +49,9 @@ import {
   CHANNEL_STATUS,
   CHANNEL_STATUS_OPTIONS,
 } from '../constants'
-import {
-  channelsQueryKeys,
-  getChannelTableRowId,
-  getChannelTypeLabel,
-} from '../lib'
+import { channelsQueryKeys, getChannelTableRowId } from '../lib'
 import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
-import { ChannelTypeLogo } from './channel-type-badge'
 import { useChannelsColumns } from './channels-columns'
 import { useChannels } from './channels-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
@@ -117,7 +112,6 @@ export function ChannelsTable() {
           return stored === 'enabled' || stored === 'disabled' ? [stored] : []
         },
       },
-      { columnId: 'type', searchKey: 'type', type: 'array' },
       { columnId: 'model', searchKey: 'model', type: 'string' },
     ],
   })
@@ -141,10 +135,6 @@ export function ChannelsTable() {
   // Extract filters from column filters
   const statusFilter =
     (columnFilters.find((f) => f.id === 'status')?.value as string[]) || []
-  const typeFilter = useMemo(
-    () => (columnFilters.find((f) => f.id === 'type')?.value as string[]) || [],
-    [columnFilters]
-  )
   const {
     value: modelFilter,
     inputValue: modelFilterInput,
@@ -193,10 +183,6 @@ export function ChannelsTable() {
         statusFilter.length > 0 && !statusFilter.includes('all')
           ? statusFilter[0]
           : undefined,
-      type:
-        typeFilter.length > 0 && !typeFilter.includes('all')
-          ? Number(typeFilter[0])
-          : undefined,
       id_sort: idSort,
       ...sortParams,
       p: pagination.pageIndex + 1,
@@ -212,10 +198,6 @@ export function ChannelsTable() {
               statusFilter.length > 0 && !statusFilter.includes('all')
                 ? statusFilter[0]
                 : undefined,
-            type:
-              typeFilter.length > 0 && !typeFilter.includes('all')
-                ? Number(typeFilter[0])
-                : undefined,
             id_sort: idSort,
             ...sortParams,
             p: pagination.pageIndex + 1,
@@ -228,10 +210,6 @@ export function ChannelsTable() {
             status:
               statusFilter.length > 0 && !statusFilter.includes('all')
                 ? statusFilter[0]
-                : undefined,
-            type:
-              typeFilter.length > 0 && !typeFilter.includes('all')
-                ? Number(typeFilter[0])
                 : undefined,
             id_sort: idSort,
             ...sortParams,
@@ -247,7 +225,6 @@ export function ChannelsTable() {
   const channels = useMemo(() => data?.data?.items || [], [data])
 
   const totalCount = data?.data?.total || 0
-  const typeCounts = data?.data?.type_counts
 
   const [viewMode, setViewMode] = useDataTableViewMode({
     storageKey: CHANNELS_VIEW_MODE_STORAGE_KEY,
@@ -289,57 +266,6 @@ export function ChannelsTable() {
       table.resetRowSelection()
     }
   }, [batchMode, table])
-
-  // Prepare filter options from existing channel types only.
-  const typeFilterOptions = useMemo(() => {
-    const counts = typeCounts || {}
-    const typeIds = Object.entries(counts)
-      .map(([type, count]) => ({
-        type: Number(type),
-        count: Number(count) || 0,
-      }))
-      .filter((item) => item.type > 0 && item.count > 0)
-      .sort((a, b) => {
-        const labelA = t(getChannelTypeLabel(a.type))
-        const labelB = t(getChannelTypeLabel(b.type))
-        return labelA.localeCompare(labelB)
-      })
-
-    const selectedType = typeFilter.find((value) => value !== 'all')
-    if (selectedType) {
-      const selectedTypeId = Number(selectedType)
-      const alreadyIncluded = typeIds.some(
-        (item) => item.type === selectedTypeId
-      )
-      if (selectedTypeId > 0 && !alreadyIncluded) {
-        typeIds.push({
-          type: selectedTypeId,
-          count: Number(counts[selectedType]) || 0,
-        })
-      }
-    }
-
-    const totalTypes = Object.values(counts).reduce(
-      (sum, count) => sum + (Number(count) || 0),
-      0
-    )
-
-    return [
-      {
-        label: 'All Types',
-        value: 'all',
-        count: totalTypes,
-      },
-      ...typeIds.map((item) => {
-        return {
-          label: getChannelTypeLabel(item.type),
-          value: String(item.type),
-          count: item.count,
-          iconNode: <ChannelTypeLogo type={item.type} size={16} />,
-        }
-      }),
-    ]
-  }, [t, typeCounts, typeFilter])
 
   return (
     <div role='region' aria-label={t('Channels')} className='relative h-full min-h-0'>
@@ -383,12 +309,6 @@ export function ChannelsTable() {
                 columnId: 'status',
                 title: t('Status'),
                 options: [...CHANNEL_STATUS_OPTIONS],
-                singleSelect: true,
-              },
-              {
-                columnId: 'type',
-                title: t('Type'),
-                options: typeFilterOptions,
                 singleSelect: true,
               },
             ],

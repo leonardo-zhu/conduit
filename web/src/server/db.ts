@@ -37,7 +37,7 @@ const MIGRATIONS = [
   CREATE TABLE upstreams (
     id            INTEGER PRIMARY KEY,
     name          TEXT NOT NULL,
-    type          INTEGER NOT NULL,        -- 沿用 NewAPI 的渠道类型编号：1 OpenAI 兼容，8 自定义，45 火山方舟，35 MiniMax
+    type          INTEGER NOT NULL,        -- NewAPI 的渠道类型编号，已不用（新建固定为 1），保留列只为兼容
     base_url      TEXT NOT NULL DEFAULT '',
     key_enc       TEXT NOT NULL,           -- 用 CONDUIT_MASTER_KEY 加密，见 crypto.ts
     key_last4     TEXT NOT NULL,

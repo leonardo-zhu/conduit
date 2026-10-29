@@ -115,5 +115,10 @@
   "Upstream errors, quota usage and failure spikes": "上游异常、额度告急和失败率突增",
   "Mark all as read": "全部已读",
   "No alerts": "暂无提醒",
-  "{{count}} times": "{{count}} 次"
+  "{{count}} times": "{{count}} 次",
+  "Please choose a protocol": "请选择协议",
+  "Choose a protocol": "选择协议",
+  "Please enter the base URL": "请填写 API 地址",
+  "e.g. Main upstream": "例如 主力上游",
+  "Model name as the upstream expects it": "填上游接受的模型名"
 }

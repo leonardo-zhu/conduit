@@ -74,18 +74,21 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import { createChannel, fetchUpstreamModels, updateChannel } from '../../api'
 import { CHANNEL_STATUS } from '../../constants'
-import { channelsQueryKeys, getChannelTypeLabel } from '../../lib'
+import { channelsQueryKeys } from '../../lib'
 import type { Channel } from '../../types'
 
-/** Conduit 接入的上游类型：1 OpenAI 兼容，8 自定义，45 火山方舟，35 MiniMax */
-const UPSTREAM_TYPES = [1, 8, 45, 35] as const
+// Conduit: 上游只有协议、地址、密钥，不区分服务商，也不按服务商给默认值
+const PROTOCOLS = ['responses', 'chat'] as const
+type Protocol = (typeof PROTOCOLS)[number]
 
 function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
-    type: z.number(),
-    protocol: z.enum(['responses', 'chat']),
-    base_url: z.string().trim(),
+    // 新建时不预选，必须自己选
+    protocol: z
+      .string()
+      .refine((v) => (PROTOCOLS as readonly string[]).includes(v), t('Please choose a protocol')),
+    base_url: z.string().trim().min(1, t('Please enter the base URL')),
     // 编辑时留空表示不改密钥
     key: isUpdate
       ? z.string()
@@ -101,8 +104,7 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 
 const EMPTY_VALUES: FormValues = {
   name: '',
-  type: 1,
-  protocol: 'chat',
+  protocol: '',
   base_url: '',
   key: '',
   models: [],
@@ -114,8 +116,7 @@ const EMPTY_VALUES: FormValues = {
 function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
-    type: channel.type,
-    protocol: channel.protocol ?? 'chat',
+    protocol: channel.protocol ?? '',
     base_url: channel.base_url ?? '',
     key: '',
     models: channel.models.split(',').filter(Boolean),
@@ -128,8 +129,7 @@ function toFormValues(channel: Channel): FormValues {
 function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
-    type: values.type,
-    protocol: values.protocol,
+    protocol: values.protocol as Protocol,
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
     test_model: values.test_model || null,
@@ -250,37 +250,7 @@ export function ChannelMutateDrawer({
                   <FormItem>
                     <FormLabel>{t('Name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={t('e.g. Ark Agent Plan')} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='type'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Type')}</FormLabel>
-                    <FormControl>
-                      <NativeSelect
-                        className='w-full'
-                        value={String(field.value)}
-                        onChange={(e) => {
-                          const type = Number(e.target.value)
-                          field.onChange(type)
-                          // 新建时选火山方舟，默认用它原生的 Responses API
-                          if (!isUpdate) {
-                            form.setValue('protocol', type === 45 ? 'responses' : 'chat')
-                          }
-                        }}
-                      >
-                        {UPSTREAM_TYPES.map((type) => (
-                          <NativeSelectOption key={type} value={type}>
-                            {t(getChannelTypeLabel(type))}
-                          </NativeSelectOption>
-                        ))}
-                      </NativeSelect>
+                      <Input {...field} placeholder={t('e.g. Main upstream')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -298,6 +268,9 @@ export function ChannelMutateDrawer({
                         value={field.value}
                         onChange={(e) => field.onChange(e.target.value)}
                       >
+                        <NativeSelectOption value='' disabled>
+                          {t('Choose a protocol')}
+                        </NativeSelectOption>
                         <NativeSelectOption value='responses'>
                           {t('Responses API (passed through)')}
                         </NativeSelectOption>
@@ -324,7 +297,7 @@ export function ChannelMutateDrawer({
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder='https://ark.cn-beijing.volces.com/api/v3'
+                        placeholder='https://api.example.com/v1'
                       />
                     </FormControl>
                     <FormMessage />
@@ -378,7 +351,7 @@ export function ChannelMutateDrawer({
                         selected={field.value}
                         onChange={field.onChange}
                         allowCreate
-                        placeholder={t('e.g. doubao-seed-1-6-251015')}
+                        placeholder={t('Model name as the upstream expects it')}
                       />
                     </FormControl>
                     <FormDescription>
