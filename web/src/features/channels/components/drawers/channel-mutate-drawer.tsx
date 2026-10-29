@@ -84,6 +84,7 @@ function getSchema(t: (key: string) => string, isUpdate: boolean) {
   return z.object({
     name: z.string().trim().min(1, t('Please enter a name')),
     type: z.number(),
+    protocol: z.enum(['responses', 'chat']),
     base_url: z.string().trim(),
     // 编辑时留空表示不改密钥
     key: isUpdate
@@ -101,6 +102,7 @@ type FormValues = z.infer<ReturnType<typeof getSchema>>
 const EMPTY_VALUES: FormValues = {
   name: '',
   type: 1,
+  protocol: 'chat',
   base_url: '',
   key: '',
   models: [],
@@ -113,6 +115,7 @@ function toFormValues(channel: Channel): FormValues {
   return {
     name: channel.name,
     type: channel.type,
+    protocol: channel.protocol ?? 'chat',
     base_url: channel.base_url ?? '',
     key: '',
     models: channel.models.split(',').filter(Boolean),
@@ -126,6 +129,7 @@ function toPayload(values: FormValues): Partial<Channel> {
   return {
     name: values.name,
     type: values.type,
+    protocol: values.protocol,
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
     test_model: values.test_model || null,
@@ -262,7 +266,14 @@ export function ChannelMutateDrawer({
                       <NativeSelect
                         className='w-full'
                         value={String(field.value)}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
+                        onChange={(e) => {
+                          const type = Number(e.target.value)
+                          field.onChange(type)
+                          // 新建时选火山方舟，默认用它原生的 Responses API
+                          if (!isUpdate) {
+                            form.setValue('protocol', type === 45 ? 'responses' : 'chat')
+                          }
+                        }}
                       >
                         {UPSTREAM_TYPES.map((type) => (
                           <NativeSelectOption key={type} value={type}>
@@ -271,6 +282,35 @@ export function ChannelMutateDrawer({
                         ))}
                       </NativeSelect>
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='protocol'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Protocol')}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        className='w-full'
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <NativeSelectOption value='responses'>
+                          {t('Responses API (passed through)')}
+                        </NativeSelectOption>
+                        <NativeSelectOption value='chat'>
+                          {t('Chat Completions (converted by the gateway)')}
+                        </NativeSelectOption>
+                      </NativeSelect>
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

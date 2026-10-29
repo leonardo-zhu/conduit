@@ -93,5 +93,9 @@
   "Regenerate key": "Regenerate key",
   "The current key of \"{{name}}\" stops working immediately. Devices using it must be updated with the new key.": "The current key of \"{{name}}\" stops working immediately. Devices using it must be updated with the new key.",
   "Regenerate": "Regenerate",
-  "Copied. Set CONDUIT_API_KEY to your key before running it.": "Copied. Set CONDUIT_API_KEY to your key before running it."
+  "Copied. Set CONDUIT_API_KEY to your key before running it.": "Copied. Set CONDUIT_API_KEY to your key before running it.",
+  "Protocol": "Protocol",
+  "Responses API (passed through)": "Responses API (passed through)",
+  "Chat Completions (converted by the gateway)": "Chat Completions (converted by the gateway)",
+  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API."
 }
