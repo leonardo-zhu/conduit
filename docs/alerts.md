@@ -90,7 +90,7 @@
 
 ## Telegram 推送
 
-复用 OpenClaw 的默认机器人，跟 OpenClaw 发到同一个私聊。多个程序共用一个机器人发消息不会冲突（冲突的只有接收消息的 getUpdates，Conduit 只发不收）。
+复用 OpenClaw 的默认机器人（大螃蟹助理，@leonardo_openclaw_bot），发到 Leonardo's Daily Briefing 频道（`-1003750120699`，机器人是频道管理员，有发帖权限）。多个程序共用一个机器人发消息不会冲突（冲突的只有接收消息的 getUpdates，Conduit 只发不收）。
 
 推送不经过任何大模型，也不经过 OpenClaw：Conduit 直接调 Telegram 的 `sendMessage`。所以就算 OpenClaw 以后接入 Conduit、Conduit 的上游挂了，告警照样能发出来。
 
@@ -101,7 +101,7 @@
 | 机器人令牌 | `CONDUIT_TELEGRAM_BOT_TOKEN` | `TELEGRAM_BOT_TOKEN_DEFAULT` |
 | chat id | `CONDUIT_TELEGRAM_CHAT_ID` | `TELEGRAM_CHAT_ID` |
 
-- **生产（R4S）**：`compose.yaml` 的 `env_file` 先加载 `/opt/stacks/.secrets/global.env`（跟 imap-service 一样），里面有 OpenClaw 默认机器人的 `TELEGRAM_BOT_TOKEN_DEFAULT` 和 `TELEGRAM_CHAT_ID`。Conduit 的 `.env` 不用填，令牌换了只改 `global.env`，再 `docker compose up -d` 让容器重读。
+- **生产（R4S）**：`compose.yaml` 的 `env_file` 先加载 `/opt/stacks/.secrets/global.env`（跟 imap-service 一样），令牌用里面 OpenClaw 默认机器人的 `TELEGRAM_BOT_TOKEN_DEFAULT`，换了只改 `global.env`，再 `docker compose up -d` 让容器重读。`global.env` 的 `TELEGRAM_CHAT_ID` 是私聊，Conduit 的 `.env` 里用 `CONDUIT_TELEGRAM_CHAT_ID=-1003750120699` 覆盖成频道。
 - **本地测试**：在 `web/.env.local` 里填 `CONDUIT_TELEGRAM_*` 两项。
 - **换别的机器人**：在 Conduit 的 `.env` 里填 `CONDUIT_TELEGRAM_*`，优先级高于 `global.env`。
 

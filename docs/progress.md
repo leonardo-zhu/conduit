@@ -7,7 +7,7 @@
 - 分支 `feat/web-console`，**未推送**。阶段 1–3 完成，阶段 4 的镜像 / CI 已做，后来按用户要求改成**直接下线 NewAPI 和 adapter**（不并行验证）。
 - **工作区里有未提交的改动**（下线 NewAPI 和 adapter）：`compose.yaml` 只剩 web、`.github/workflows/deploy.yml` 只构建 web、`deploy/Caddyfile.snippet` 指向 3012、根目录 `.env.example`、`README.md`、`docs/apps.md`、`docs/setup.md` 重写、删除 `adapter/` 目录、`web/src/server/gateway/transforms.ts` 注释。用户说“先别做部署”，所以没提交；等用户说要部署再提交。
 - 最近一轮修 bug 的提交（`e8892e7`..`34ad2b2`）：令牌抽屉死循环、删除二次验证残留、复制上游去掉重置余额、错误页去掉 NewAPI 反馈按钮、概览余额改为各应用汇总、看板“分流”去掉节点和分组层并把“用户”改称“应用”、日志显示“估算”且中途断开的请求算作消耗、应用页“最后登录”改“最近请求”、顶栏去掉通知和“主页”“控制台”、去掉主题设置面板（跟随系统深浅色）。
-- 顶栏铃铛已恢复，改为**网关事件提醒**（`9b7201c`..`76a96e8`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`（`compose.yaml` 和根目录 `.env.example` 的相应改动跟部署改动一起未提交），本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件推送成功（服务端无报错，待用户确认手机收到）。
+- 顶栏铃铛已恢复，改为**网关事件提醒**（`9b7201c`..`76a96e8`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`（`compose.yaml` 和根目录 `.env.example` 的相应改动跟部署改动一起未提交），本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
 
 ### 下次先做
 
