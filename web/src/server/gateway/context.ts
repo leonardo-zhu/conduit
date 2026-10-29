@@ -6,6 +6,7 @@ import { effectiveTokenStatus, TOKEN_STATUS, type TokenRow } from '../api/tokens
 import { getUpstream, type UpstreamRow } from '../api/upstreams'
 import { hashTokenKey } from '../crypto'
 import { db, parseJsonArray } from '../db'
+import { noteQuotaRejected } from './alerts'
 import { GatewayError } from './errors'
 
 export interface GatewayAuth {
@@ -76,6 +77,7 @@ export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
 export function checkQuota(auth: GatewayAuth) {
   const { token } = auth
   if (token.quota > 0 && token.used >= token.quota) {
+    noteQuotaRejected(auth, 'token')
     throw new GatewayError('insufficient_quota', 'token_quota_exhausted', '令牌额度已用尽')
   }
   rolloverAppPeriods()
@@ -84,6 +86,7 @@ export function checkQuota(auth: GatewayAuth) {
     used: number
   }
   if (app.quota > 0 && app.used >= app.quota) {
+    noteQuotaRejected(auth, 'app')
     throw new GatewayError('insufficient_quota', 'app_quota_exhausted', '应用额度已用尽')
   }
 }
