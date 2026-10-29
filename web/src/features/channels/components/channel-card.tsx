@@ -81,11 +81,16 @@ function ChannelCardComponent({
         data-state={isSelected ? 'selected' : undefined}
         className='flex min-w-0 flex-col gap-3'
       >
-        {/* Row 1: selection + endpoints, with status badge + actions menu */}
-        <div className='flex items-center justify-between gap-2'>
-          <div className='flex min-w-0 flex-1 items-center gap-2'>
+        {/* Row 1: selection + name, with status badge + actions menu */}
+        <div className='flex items-start justify-between gap-2'>
+          <div className='flex min-w-0 flex-1 items-start gap-2'>
             {selectCell && <span className='shrink-0'>{selectCell}</span>}
-            <div className='shrink-0'>{endpointsCell}</div>
+            <div className='min-w-0 overflow-hidden text-sm'>
+              <div className={labelClass}>
+                #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
+              </div>
+              {nameCell}
+            </div>
           </div>
           <div className='flex shrink-0 items-center gap-1.5'>
             {showStatusBadge && statusCell}
@@ -93,13 +98,9 @@ function ChannelCardComponent({
           </div>
         </div>
 
+        <div className='-ml-1.5 min-w-0'>{endpointsCell}</div>
+
         <StatusBadgeTypeContext.Provider value='text'>
-          <div className='min-w-0 overflow-hidden text-sm'>
-            <div className={labelClass}>
-              #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
-            </div>
-            {nameCell}
-          </div>
           <dl className='grid grid-cols-2 gap-x-3 gap-y-1'>
             <dt className={labelClass}>{t('Response')}</dt>
             <dt className={labelClass}>{t('Last Tested')}</dt>
