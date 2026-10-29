@@ -131,5 +131,15 @@
   "Anthropic-compatible base URL": "Anthropic-compatible base URL",
   "(optional)": "(optional)",
   "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the upstream has no Anthropic API.": "Fill it in like ANTHROPIC_BASE_URL. Calls to /v1/messages are forwarded to <address>/v1/messages as-is, never converted. Leave empty if the provider has no Anthropic API.",
-  "Usage overview": "Usage"
+  "Usage overview": "Usage",
+  "A key can call every alias of this app and shares its quota": "A key can call every alias of this app and shares its quota",
+  "Apps or devices using \"{{name}}\" can no longer call the gateway. This cannot be undone.": "Apps or devices using \"{{name}}\" can no longer call the gateway. This cannot be undone.",
+  "Delete API key": "Delete API key",
+  "Each key can call every alias above and shares the app quota": "Each key can call every alias above and shares the app quota",
+  "Edit API key": "Edit API key",
+  "Expires {{date}}": "Expires {{date}}",
+  "No keys yet. Create one to call this app's aliases.": "No keys yet. Create one to call this app's aliases.",
+  "One key per device or deployment, so you can revoke one without touching the others": "One key per device or deployment, so you can revoke one without touching the others",
+  "Save the app first, then add keys to it": "Save the app first, then add keys to it",
+  "Shared by all keys of this app; 0 means unlimited": "Shared by all keys of this app; 0 means unlimited"
 }

@@ -5,7 +5,7 @@ import { rolloverAppPeriods, type AppRow } from '../api/apps'
 import { effectiveTokenStatus, TOKEN_STATUS, type TokenRow } from '../api/tokens'
 import { getUpstream, type UpstreamRow } from '../api/upstreams'
 import { hashTokenKey } from '../crypto'
-import { db, parseJsonArray } from '../db'
+import { db } from '../db'
 import { noteQuotaRejected } from './alerts'
 import { GatewayError } from './errors'
 
@@ -52,7 +52,7 @@ export function authenticate(headers: Headers, ip: string): GatewayAuth {
   return { token, app }
 }
 
-/** 别名必须在令牌白名单里，并且是令牌所属应用的别名 */
+/** 别名必须是令牌所属应用的别名 */
 export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
   if (typeof model !== 'string' || !model) {
     throw new GatewayError('invalid_request_error', 'missing_model', '请求里缺少 model（模型别名）')
@@ -60,9 +60,8 @@ export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
   const notFound = new GatewayError(
     'invalid_request_error',
     'model_not_found',
-    `模型别名 ${model} 不存在，或这个令牌不能使用它`
+    `模型别名 ${model} 在这个应用里不存在`
   )
-  if (!parseJsonArray(auth.token.models).includes(model)) throw notFound
 
   const alias = db()
     .prepare('SELECT upstream_id, upstream_model FROM aliases WHERE app_id = ? AND name = ?')
@@ -76,20 +75,15 @@ export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
   return { alias: model, upstream, upstreamModel: alias.upstream_model }
 }
 
-/** 请求前检查令牌和应用都还有余额；不预占，请求结束后按实际用量扣 */
+/** 请求前检查应用还有余额；不预占，请求结束后按实际用量扣 */
 export function checkQuota(auth: GatewayAuth) {
-  const { token } = auth
-  if (token.quota > 0 && token.used >= token.quota) {
-    noteQuotaRejected(auth, 'token')
-    throw new GatewayError('insufficient_quota', 'token_quota_exhausted', '令牌额度已用尽')
-  }
   rolloverAppPeriods()
   const app = db().prepare('SELECT quota, used FROM apps WHERE id = ?').get(auth.app.id) as {
     quota: number
     used: number
   }
   if (app.quota > 0 && app.used >= app.quota) {
-    noteQuotaRejected(auth, 'app')
+    noteQuotaRejected(auth)
     throw new GatewayError('insufficient_quota', 'app_quota_exhausted', '应用额度已用尽')
   }
 }

@@ -81,7 +81,7 @@ const SETUP_GUIDE_CODE_PATTERN = [
 ].join('\n')
 
 type DashboardActionPath =
-  | '/keys'
+  | '/apps'
   | '/wallet'
   | '/playground'
   | '/channels'
@@ -356,7 +356,7 @@ function RequestPreview(props: {
             {isCopying ? t('Loading') : t('Copy')}
           </Button>
         ) : (
-          <Button size='sm' variant='outline' render={<Link to='/keys' />}>
+          <Button size='sm' variant='outline' render={<Link to='/apps' />}>
             {t('Create API Key')}
           </Button>
         )}
@@ -473,36 +473,35 @@ export function OverviewDashboard() {
   const apiKeysQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'api-keys'],
     queryFn: async () => {
-      const result = requireServerSuccess(await getApiKeys({ p: 1, size: 10 }))
+      const result = requireServerSuccess(await getApiKeys({ size: 10 }))
       return result.success ? (result.data?.items ?? []) : []
     },
     staleTime: 60 * 1000,
-  })
-
-  const modelsQuery = useQuery({
-    queryKey: ['dashboard', 'overview', 'user-models'],
-    queryFn: async () => {
-      const result = requireServerSuccess(await getUserModels())
-      return result.success ? (result.data ?? []) : []
-    },
-    staleTime: 5 * 60 * 1000,
   })
 
   const preferredKey = useMemo(
     () => getPreferredKey(apiKeysQuery.data ?? []),
     [apiKeysQuery.data]
   )
-  // Conduit: 示例用这个令牌白名单里的第一个别名，照抄就能调通
-  const exampleModel =
-    preferredKey?.model_limits?.split(',').find(Boolean) ??
-    modelsQuery.data?.[0]
+  // Conduit: 示例用这个密钥所属应用的第一个别名，照抄就能调通
+  const exampleAppId = preferredKey?.user_id
+  const modelsQuery = useQuery({
+    queryKey: ['dashboard', 'overview', 'user-models', exampleAppId],
+    queryFn: async () => {
+      const result = requireServerSuccess(await getUserModels(exampleAppId))
+      return result.success ? (result.data ?? []) : []
+    },
+    enabled: apiKeysQuery.isFetched,
+    staleTime: 5 * 60 * 1000,
+  })
+  const exampleModel = modelsQuery.data?.[0]
 
   const startSteps = useMemo<StartStep[]>(
     () => [
       {
         title: t('Create API Key'),
         description: t('Create a key for your app or service'),
-        to: '/keys',
+        to: '/apps',
         icon: KeyRound,
         completed: Boolean(preferredKey),
       },
@@ -520,9 +519,9 @@ export function OverviewDashboard() {
   const quickActions = useMemo<QuickAction[]>(
     () => [
       {
-        title: t('API Keys'),
+        title: t('Apps'),
         description: t('Create a key for your app or service'),
-        to: '/keys',
+        to: '/apps',
         icon: KeyRound,
       },
       {
@@ -664,7 +663,7 @@ export function OverviewDashboard() {
                               <ChevronUp data-icon='inline-start' />
                               {t('Hide setup guide')}
                             </Button>
-                            <Button size='sm' render={<Link to='/keys' />}>
+                            <Button size='sm' render={<Link to='/apps' />}>
                               <KeyRound data-icon='inline-start' />
                               {t('Create API Key')}
                             </Button>

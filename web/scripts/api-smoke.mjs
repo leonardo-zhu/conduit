@@ -142,27 +142,10 @@ check('有别名指向的上游不能删', !delCopy.success && delCopy.message.i
 // ---------------------------------------------------------------------------
 console.log('\n令牌')
 
-const noModels = await call('POST', '/api/token', { user_id: appId, name: 'smoke-t', unlimited_quota: true, model_limits: '' })
-check('没选模型被拒', !noModels.success, noModels)
+const noName = await call('POST', '/api/token', { user_id: appId, name: ' ' })
+check('没填名称被拒', !noName.success, noName)
 
-const foreign = await call('POST', '/api/token', {
-  user_id: appId,
-  name: 'smoke-t',
-  unlimited_quota: true,
-  model_limits: 'smoke-chat,vita-chat',
-})
-check('别的应用的别名被拒', !foreign.success && foreign.message.includes('vita-chat'), foreign)
-
-const zeroQuota = await call('POST', '/api/token', { user_id: appId, name: 'smoke-t', remain_quota: 0, model_limits: 'smoke-chat' })
-check('额度为 0 又不是不限被拒', !zeroQuota.success, zeroQuota)
-
-const token = await call('POST', '/api/token', {
-  user_id: appId,
-  name: 'smoke-t',
-  remain_quota: 500,
-  expired_time: -1,
-  model_limits: 'smoke-chat,smoke-fast',
-})
+const token = await call('POST', '/api/token', { user_id: appId, name: 'smoke-t', expired_time: -1 })
 const key = token.data?.key
 check('创建令牌并返回一次明文', token.success && /^[0-9A-Za-z]{48}$/.test(key), token)
 const tokenId = token.data?.id
@@ -173,7 +156,7 @@ check('库里只存哈希', row?.key_hash === createHash('sha256').update(key).d
 const got = await call('GET', `/api/token/${tokenId}`)
 check(
   '查询时只返回打码的密钥',
-  got.data?.key === `${key.slice(0, 4)}****${key.slice(-4)}` && got.data.remain_quota === 500 && !got.data.unlimited_quota,
+  got.data?.key === `${key.slice(0, 4)}****${key.slice(-4)}` && got.data.expired_time === -1,
   got.data
 )
 
@@ -189,22 +172,18 @@ check('禁用令牌', status.success && status.data.status === 2, status)
 const edit = await call('PUT', '/api/token', {
   id: tokenId,
   name: 'smoke-t2',
-  unlimited_quota: true,
   expired_time: Math.floor(Date.now() / 1000) - 10,
-  model_limits: 'smoke-chat',
 })
-check('编辑后过期状态现算为 3', edit.success && edit.data.status === 2 && edit.data.unlimited_quota, edit.data)
+check('编辑后仍是禁用（禁用优先于过期）', edit.success && edit.data.status === 2 && edit.data.name === 'smoke-t2', edit.data)
 await call('PUT', '/api/token/?status_only=true', { id: tokenId, status: 1 })
 const expired = await call('GET', `/api/token/${tokenId}`)
 check('启用后显示为已过期', expired.data?.status === 3, expired.data)
 
-const shrink = await call('PUT', `/api/app/${appId}/aliases`, {
-  aliases: [{ name: 'smoke-fast', upstream_id: copyId, upstream_model: 'model-b' }],
-})
-check('令牌还在用的别名不能删', !shrink.success && shrink.message.includes('smoke-chat'), shrink)
-
 const list = await call('GET', '/api/token/search?keyword=smoke-app')
 check('按应用搜令牌', list.data?.items?.some((t) => t.id === tokenId && t.app_name === 'smoke-app'), list)
+
+const byApp = await call('GET', `/api/token?app_id=${appId}`)
+check('按应用 id 列令牌', byApp.data?.items?.length === 1 && byApp.data.items[0].id === tokenId, byApp.data)
 
 // ---------------------------------------------------------------------------
 console.log('\n日志和看板')

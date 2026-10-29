@@ -119,52 +119,14 @@ function checkQuotaCrossing({ auth, charge }: RequestOutcome) {
   const app = db().prepare('SELECT quota, used FROM apps WHERE id = ?').get(auth.app.id) as
     | { quota: number; used: number }
     | undefined
-  if (app) {
-    quotaCrossing({
-      quota: app.quota,
-      used: app.used,
-      charge,
-      subjectType: 'app',
-      subjectId: auth.app.id,
-      subjectName: auth.app.slug,
-      label: `应用 ${auth.app.slug}`,
-      link: '/apps',
-    })
-  }
-  const token = db().prepare('SELECT quota, used FROM tokens WHERE id = ?').get(auth.token.id) as
-    | { quota: number; used: number }
-    | undefined
-  if (token) {
-    quotaCrossing({
-      quota: token.quota,
-      used: token.used,
-      charge,
-      subjectType: 'token',
-      subjectId: auth.token.id,
-      subjectName: `${auth.app.slug} / ${auth.token.name}`,
-      label: `令牌 ${auth.app.slug} / ${auth.token.name}`,
-      link: '/keys',
-    })
-  }
-}
-
-function quotaCrossing(args: {
-  quota: number
-  used: number
-  charge: number
-  subjectType: 'app' | 'token'
-  subjectId: number
-  subjectName: string
-  label: string
-  link: string
-}) {
-  const { quota, used, charge } = args
-  if (quota <= 0) return
+  if (!app || app.quota <= 0) return
+  const { quota, used } = app
   const before = used - charge
+  const label = `应用 ${auth.app.slug}`
   const detail = `额度 ${formatTokens(quota)} tokens，已用 ${formatTokens(used)}`
-  const base = { subjectType: args.subjectType, subjectId: args.subjectId, subjectName: args.subjectName, link: args.link }
+  const base = { subjectType: 'app' as const, subjectId: auth.app.id, subjectName: auth.app.slug, link: '/apps' }
   const fields: EventField[] = [
-    [args.subjectType === 'app' ? '应用' : '令牌', args.subjectName],
+    ['应用', auth.app.slug],
     ['额度', `${formatTokens(quota)} tokens`],
     ['已用', `${formatTokens(used)} tokens（${percent(used, quota)}）`],
   ]
@@ -173,31 +135,28 @@ function quotaCrossing(args: {
       ...base,
       kind: 'quota_exhausted',
       level: 'error',
-      title: `${args.label} 的额度已用尽`,
+      title: `${label} 的额度已用尽`,
       detail,
       fields: [...fields, ['影响', '之后的请求会被拒绝（429）']],
     })
   } else if (before < quota * QUOTA_WARNING_RATIO && used >= quota * QUOTA_WARNING_RATIO) {
-    safeRaiseEvent({ ...base, kind: 'quota_warning', level: 'warning', title: `${args.label} 的额度已用 80%`, detail, fields })
+    safeRaiseEvent({ ...base, kind: 'quota_warning', level: 'warning', title: `${label} 的额度已用 80%`, detail, fields })
   }
 }
 
 /** 额度用尽后被网关拒绝的请求（这些请求不写用量记录） */
-export function noteQuotaRejected(auth: GatewayAuth, scope: 'app' | 'token') {
-  const isApp = scope === 'app'
-  const label = isApp ? `应用 ${auth.app.slug}` : `令牌 ${auth.app.slug} / ${auth.token.name}`
-  const name = isApp ? auth.app.slug : `${auth.app.slug} / ${auth.token.name}`
+export function noteQuotaRejected(auth: GatewayAuth) {
   safeRaiseEvent({
     kind: 'quota_exhausted',
     level: 'error',
-    subjectType: scope,
-    subjectId: isApp ? auth.app.id : auth.token.id,
-    subjectName: name,
-    title: `${label} 的额度已用尽`,
+    subjectType: 'app',
+    subjectId: auth.app.id,
+    subjectName: auth.app.slug,
+    title: `应用 ${auth.app.slug} 的额度已用尽`,
     detail: '额度用尽后被拒绝的请求也计入次数',
-    link: isApp ? '/apps' : '/keys',
+    link: '/apps',
     fields: [
-      [isApp ? '应用' : '令牌', name],
+      ['应用', auth.app.slug],
       ['影响', '请求被拒绝（429），调整额度或等下个周期重置'],
     ],
   })

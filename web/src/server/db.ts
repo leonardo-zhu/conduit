@@ -66,9 +66,9 @@ const MIGRATIONS = [
     key_last4     TEXT NOT NULL,
     status        INTEGER NOT NULL DEFAULT 1,  -- 1 启用，2 禁用（过期、额度用尽按字段现算）
     expires_at    INTEGER NOT NULL DEFAULT -1, -- -1 不过期
-    quota         INTEGER NOT NULL DEFAULT 0,
+    quota         INTEGER NOT NULL DEFAULT 0,  -- 迁移 7 起不用
     used          INTEGER NOT NULL DEFAULT 0,
-    models        TEXT NOT NULL DEFAULT '[]',  -- 可用的别名（JSON 数组），必须属于同一应用
+    models        TEXT NOT NULL DEFAULT '[]',  -- 迁移 7 起不用，令牌能用应用的全部别名
     allow_ips     TEXT NOT NULL DEFAULT '',
     created_at    INTEGER NOT NULL,
     last_used_at  INTEGER NOT NULL DEFAULT 0
@@ -128,6 +128,9 @@ const MIGRATIONS = [
   // Anthropic 兼容地址（选填）：填了就提供 /v1/messages，直接转发到 <地址>/v1/messages，不做和 OpenAI 格式的转换。
   // 同一家的 OpenAI 和 Anthropic 接口通常是不同地址、同一个密钥
   `ALTER TABLE upstreams ADD COLUMN anthropic_base_url TEXT NOT NULL DEFAULT '';`,
+  // 令牌不再单独设额度和模型白名单：额度只在应用上，令牌能用所属应用的全部别名。
+  // 列保留不用（used 仍按令牌累计，看板和日志用得到）
+  `UPDATE tokens SET quota = 0, models = '[]';`,
 ]
 
 function open(): DatabaseSync {

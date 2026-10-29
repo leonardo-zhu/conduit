@@ -18,45 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
-// ============================================================================
-// API Key Schema & Types
-// ============================================================================
-
+/**
+ * Conduit: 令牌（API 密钥）归属应用，在应用抽屉里管理。没有自己的额度和模型白名单，
+ * 能用所属应用的全部别名。
+ */
 export const apiKeySchema = z.object({
   id: z.number(),
-  // Conduit: 令牌所属的应用（NewAPI 里是令牌所属用户）
-  user_id: z.number().optional(),
+  user_id: z.number(), // 所属应用
   app_name: z.string().optional().default(''),
   name: z.string(),
-  key: z.string(),
-  status: z.number(), // 1: enabled, 2: disabled, 3: expired, 4: exhausted
-  remain_quota: z.number(),
+  key: z.string(), // 首尾各 4 位，明文只在创建和重新生成时返回一次
+  status: z.number(), // 1 启用，2 禁用，3 已过期
   used_quota: z.number(),
-  unlimited_quota: z.boolean(),
-  expired_time: z.number(), // -1 for never expires
+  expired_time: z.number(), // -1 不过期
   created_time: z.number(),
   accessed_time: z.number(),
-  group: z.string().nullish().default(''),
-  auto_groups: z.array(z.string()).nullish().default(null),
-  cross_group_retry: z
-    .preprocess((v) => {
-      if (v === 1) return true
-      if (v === 0) return false
-      return v
-    }, z.boolean())
-    .optional()
-    .default(false),
-  model_limits_enabled: z.boolean(),
-  model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
-  allow_user_quota_query: z.boolean().optional().default(false),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
-
-// ============================================================================
-// API Request/Response Types
-// ============================================================================
 
 export interface ApiResponse<T = unknown> {
   success: boolean
@@ -64,47 +44,15 @@ export interface ApiResponse<T = unknown> {
   data?: T
 }
 
-export interface GetApiKeysParams {
-  p?: number
-  size?: number
-}
-
-export interface GetApiKeysResponse {
-  success: boolean
-  message?: string
-  data?: {
-    items: ApiKey[]
-    total: number
-    page: number
-    page_size: number
-  }
-}
-
-export interface SearchApiKeysParams {
-  keyword?: string
-  token?: string
-  p?: number
-  size?: number
+export interface ApiKeyList {
+  items: ApiKey[]
+  total: number
+  page: number
+  page_size: number
 }
 
 export interface ApiKeyFormData {
   name: string
-  remain_quota: number
   expired_time: number
-  unlimited_quota: boolean
-  model_limits_enabled: boolean
-  model_limits: string
   allow_ips: string
-  user_id: number
 }
-
-// ============================================================================
-// Dialog Types
-// ============================================================================
-
-export type ApiKeysDialogType =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'regenerate'
-  | 'batch-delete'

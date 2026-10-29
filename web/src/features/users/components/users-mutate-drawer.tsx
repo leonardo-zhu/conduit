@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
  * Conduit: 应用（NewAPI 用户）的新建 / 编辑抽屉。
  *
  * 应用不登录，所以去掉了 NewAPI 的密码、角色、分组、管理员权限矩阵和二次验证；
- * 只保留应用标识、显示名、额度（token）和备注，另加 Conduit 的模型别名。
+ * 只保留应用标识、显示名、额度（token）和备注，另加 Conduit 的模型别名和 API 密钥。
  */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -65,6 +65,7 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { getChannels } from '@/features/channels/api'
+import { AppKeysSection } from '@/features/keys/components/app-keys-section'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { createUser, getAppAliases, saveAppAliases, updateUser } from '../api'
@@ -394,6 +395,11 @@ export function UsersMutateDrawer({
               )}
             </SideDrawerSection>
 
+            <AppKeysSection
+              appId={currentRow?.id}
+              appSlug={currentRow?.username ?? slug}
+            />
+
             <SideDrawerSection>
               <SideDrawerSectionHeader
                 title={t('Budget')}
@@ -418,7 +424,7 @@ export function UsersMutateDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Shared by all keys of this app; 0 means unlimited. Each key can have its own cap.')}
+                      {t('Shared by all keys of this app; 0 means unlimited')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

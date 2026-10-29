@@ -18,57 +18,26 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
-import type {
-  ApiKey,
-  ApiResponse,
-  GetApiKeysParams,
-  GetApiKeysResponse,
-  SearchApiKeysParams,
-  ApiKeyFormData,
-} from './types'
+import type { ApiKey, ApiKeyFormData, ApiKeyList, ApiResponse } from './types'
 
-// ============================================================================
-// API Key Management
-// ============================================================================
-
-// Get paginated API keys list
 export async function getApiKeys(
-  params: GetApiKeysParams = {}
-): Promise<GetApiKeysResponse> {
-  const { p = 1, size = 10 } = params
-  const res = await api.get(`/api/token/?p=${p}&size=${size}`)
+  params: { appId?: number; p?: number; size?: number } = {}
+): Promise<ApiResponse<ApiKeyList>> {
+  const { appId, p = 1, size = 100 } = params
+  const query = new URLSearchParams({ p: String(p), size: String(size) })
+  if (appId) query.set('app_id', String(appId))
+  const res = await api.get(`/api/token/?${query.toString()}`)
   return res.data
 }
 
-// Search API keys by keyword or token (with pagination)
-export async function searchApiKeys(
-  params: SearchApiKeysParams
-): Promise<GetApiKeysResponse> {
-  const { keyword = '', token = '', p, size } = params
-  const queryParams = new URLSearchParams()
-  if (keyword) queryParams.set('keyword', keyword)
-  if (token) queryParams.set('token', token)
-  if (p != null) queryParams.set('p', String(p))
-  if (size != null) queryParams.set('size', String(size))
-  const res = await api.get(`/api/token/search?${queryParams.toString()}`)
-  return res.data
-}
-
-// Get single API key by ID
-export async function getApiKey(id: number): Promise<ApiResponse<ApiKey>> {
-  const res = await api.get(`/api/token/${id}`)
-  return res.data
-}
-
-// Create a new API key
+// 创建：返回的 key 是明文（不带 sk-），只这一次
 export async function createApiKey(
-  data: ApiKeyFormData
-): Promise<ApiResponse<ApiKey>> {
+  data: ApiKeyFormData & { user_id: number }
+): Promise<ApiResponse<ApiKey & { key: string }>> {
   const res = await api.post('/api/token/', data)
   return res.data
 }
 
-// Update an existing API key
 export async function updateApiKey(
   data: ApiKeyFormData & { id: number }
 ): Promise<ApiResponse<ApiKey>> {
@@ -76,21 +45,6 @@ export async function updateApiKey(
   return res.data
 }
 
-// Delete a single API key
-export async function deleteApiKey(id: number): Promise<ApiResponse> {
-  const res = await api.delete(`/api/token/${id}/`)
-  return res.data
-}
-
-// Batch delete multiple API keys
-export async function batchDeleteApiKeys(
-  ids: number[]
-): Promise<ApiResponse<number>> {
-  const res = await api.post('/api/token/batch', { ids })
-  return res.data
-}
-
-// Update API key status (enable/disable)
 export async function updateApiKeyStatus(
   id: number,
   status: number
@@ -99,10 +53,15 @@ export async function updateApiKeyStatus(
   return res.data
 }
 
-// Conduit: 服务端只存哈希，查不到明文。重新生成后旧密钥立即失效，新明文只返回这一次
+// 服务端只存哈希，查不到明文。重新生成后旧密钥立即失效，新明文只返回这一次
 export async function regenerateApiKey(
   id: number
 ): Promise<ApiResponse<ApiKey & { key: string }>> {
   const res = await api.post(`/api/token/${id}/regenerate`)
+  return res.data
+}
+
+export async function deleteApiKey(id: number): Promise<ApiResponse> {
+  const res = await api.delete(`/api/token/${id}/`)
   return res.data
 }
