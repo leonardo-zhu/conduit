@@ -35,6 +35,9 @@ export interface EventRow {
   read_at: number
 }
 
+/** 推送用的“名称：值”一行 */
+export type EventField = [label: string, value: string]
+
 export interface EventInput {
   kind: EventKind
   level: EventLevel
@@ -44,6 +47,9 @@ export interface EventInput {
   title: string
   detail?: string
   link?: string
+  /** 只用于推送排版，不入库：逐行列出的关键信息，和附在末尾的上游原始响应 */
+  fields?: EventField[]
+  raw?: string
 }
 
 const MERGE_WINDOW = 3600

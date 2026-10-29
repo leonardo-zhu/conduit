@@ -10,7 +10,7 @@
  * 连不上 api.telegram.org 时，可以用 CONDUIT_TELEGRAM_API 换成反代地址，
  * 或者设 NODE_USE_ENV_PROXY=1 加 HTTPS_PROXY 走代理（Node 24 起支持）。
  */
-import type { EventInput } from './events'
+import type { EventInput, EventKind } from './events'
 
 const SEND_TIMEOUT_MS = 10_000
 
@@ -20,12 +20,58 @@ function telegramConfig() {
   return token && chatId ? { token, chatId } : null
 }
 
-function messageFor(event: EventInput): string {
-  const lines = [`${event.level === 'error' ? '🔴' : '🟡'} Conduit：${event.title}`]
-  if (event.detail) lines.push(event.detail)
+const KIND_LABEL: Record<EventKind, string> = {
+  upstream_auth: '上游拒绝密钥',
+  upstream_rate_limit: '上游限流',
+  upstream_failing: '上游连续失败',
+  quota_warning: '额度将尽',
+  quota_exhausted: '额度用尽',
+  error_rate: '错误率突增',
+}
+
+const RAW_LIMIT = 800
+
+const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** 上游原始响应：是 JSON 就缩进排版，太长截断 */
+function formatRaw(raw: string): string {
+  let text = raw.trim()
+  try {
+    text = JSON.stringify(JSON.parse(text), null, 2)
+  } catch {
+    // 不是 JSON，原样
+  }
+  return text.length > RAW_LIMIT ? `${text.slice(0, RAW_LIMIT)}\n…` : text
+}
+
+/**
+ * Telegram 的 HTML 格式：
+ *
+ *   🔴 上游拒绝密钥 · Conduit
+ *   上游：xxx
+ *   状态码：401
+ *   ……
+ *   上游返回
+ *   <代码块>
+ *   在后台查看 →
+ *   #conduit
+ */
+export function messageFor(event: EventInput): string {
+  const icon = event.level === 'error' ? '🔴' : '🟡'
+  const lines = [`${icon} <b>${KIND_LABEL[event.kind]}</b> · Conduit`, '']
+  if (event.fields?.length) {
+    for (const [label, value] of event.fields) lines.push(`<b>${escapeHtml(label)}</b>：${escapeHtml(value)}`)
+  } else {
+    lines.push(escapeHtml(event.title))
+    if (event.detail) lines.push(escapeHtml(event.detail))
+  }
+  if (event.raw?.trim()) {
+    lines.push('', '<b>上游返回</b>', `<pre>${escapeHtml(formatRaw(event.raw))}</pre>`)
+  }
   // PASSKEY_ORIGIN 就是后台地址，生产环境必填
   const origin = process.env.PASSKEY_ORIGIN?.replace(/\/+$/, '')
-  if (origin && event.link) lines.push(`${origin}${event.link}`)
+  if (origin && event.link) lines.push('', `<a href="${escapeHtml(origin + event.link)}">在后台查看 →</a>`)
+  lines.push('', '#conduit')
   return lines.join('\n')
 }
 
@@ -39,7 +85,8 @@ export function pushEventToTelegram(event: EventInput) {
     body: JSON.stringify({
       chat_id: config.chatId,
       text: messageFor(event),
-      disable_web_page_preview: true,
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
     }),
     signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   })
