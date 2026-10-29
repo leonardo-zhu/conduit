@@ -210,7 +210,7 @@ function deleteUpstreams(ids: number[]): { deleted: number } | { error: string }
       return { deleted }
     })
   } catch (e) {
-    if (isForeignKeyViolation(e)) return { error: '还有应用的别名指向这个上游，先在应用里改掉这些别名' }
+    if (isForeignKeyViolation(e)) return { error: '还有应用的别名指向这个服务商，先在应用里改掉这些别名' }
     throw e
   }
 }
@@ -220,7 +220,7 @@ route('GET', '/api/channel/search', ({ query }) => listUpstreams(query))
 
 route('GET', '/api/channel/:id', ({ params }) => {
   const row = getUpstream(Number(params.id))
-  return row ? ok(toChannel(row, usedTokens().get(row.id))) : fail('上游不存在')
+  return row ? ok(toChannel(row, usedTokens().get(row.id))) : fail('服务商不存在')
 })
 
 route('POST', '/api/channel', ({ body }) => {
@@ -234,7 +234,7 @@ route('POST', '/api/channel', ({ body }) => {
 
 route('PUT', '/api/channel', ({ body }) => {
   const id = Number((body as { id?: unknown })?.id)
-  if (!getUpstream(id)) return fail('上游不存在')
+  if (!getUpstream(id)) return fail('服务商不存在')
   const { fields, error } = readUpstreamInput(body, true)
   if (error || !fields) return fail(error ?? '参数错误')
   updateUpstream(id, fields)
@@ -243,7 +243,7 @@ route('PUT', '/api/channel', ({ body }) => {
 
 route('POST', '/api/channel/:id/status', ({ params, body }) => {
   const row = getUpstream(Number(params.id))
-  if (!row) return fail('上游不存在')
+  if (!row) return fail('服务商不存在')
   const status = Number((body as { status?: unknown })?.status) === UPSTREAM_STATUS.ENABLED ? 1 : 2
   updateUpstream(row.id, { status })
   return ok(true)
@@ -260,7 +260,7 @@ route('POST', '/api/channel/status/batch', ({ body }) => {
 route('DELETE', '/api/channel/:id', ({ params }) => {
   const result = deleteUpstreams([Number(params.id)])
   if ('error' in result) return fail(result.error)
-  return result.deleted ? ok() : fail('上游不存在')
+  return result.deleted ? ok() : fail('服务商不存在')
 })
 
 route('POST', '/api/channel/batch', ({ body }) => {
@@ -273,7 +273,7 @@ route('POST', '/api/channel/batch', ({ body }) => {
 // 复制：密钥一并复制（仍是加密的），名称加后缀
 route('POST', '/api/channel/copy/:id', ({ params, query }) => {
   const row = getUpstream(Number(params.id))
-  if (!row) return fail('上游不存在')
+  if (!row) return fail('服务商不存在')
   const { id: _id, created_at: _c, test_time: _t, response_time: _r, ...rest } = row
   const id = insertUpstream({ ...rest, name: `${row.name}${query.get('suffix') ?? '_复制'}` })
   return ok({ id })
@@ -296,16 +296,16 @@ async function callUpstream(row: UpstreamRow, path: string, init: RequestInit = 
 }
 
 function describeError(error: unknown): string {
-  if (error instanceof Error && error.name === 'TimeoutError') return '请求上游超时'
+  if (error instanceof Error && error.name === 'TimeoutError') return '请求服务商超时'
   return error instanceof Error ? error.message : String(error)
 }
 
 // 测试：用测试模型发一个 max_tokens=1 的 Chat Completions 请求
 route('GET', '/api/channel/test/:id', async ({ params, query }: ApiRequest) => {
   const row = getUpstream(Number(params.id))
-  if (!row) return fail('上游不存在')
+  if (!row) return fail('服务商不存在')
   const model = query.get('model') || row.test_model || parseJsonArray(row.models)[0]
-  if (!model) return fail('没有可测试的模型：先在上游里填模型列表或测试模型')
+  if (!model) return fail('没有可测试的模型：先在服务商里填模型列表或测试模型')
 
   const started = Date.now()
   try {
@@ -316,28 +316,28 @@ route('GET', '/api/channel/test/:id', async ({ params, query }: ApiRequest) => {
     const elapsed = Date.now() - started
     if (!res.ok) {
       const text = (await res.text().catch(() => '')).slice(0, 300)
-      return fail(`上游返回 ${res.status}：${text}`)
+      return fail(`服务商返回 ${res.status}：${text}`)
     }
     updateUpstream(row.id, { test_time: nowSeconds(), response_time: elapsed })
     // NewAPI 的测试接口把耗时（秒）放在顶层 time 字段
     return { body: { success: true, message: '', time: elapsed / 1000 } }
   } catch (error) {
-    return fail(`连接上游失败：${describeError(error)}`)
+    return fail(`连接服务商失败：${describeError(error)}`)
   }
 })
 
 // 拉取上游的模型列表（OpenAI 兼容的 GET /models）
 route('GET', '/api/channel/fetch_models/:id', async ({ params }: ApiRequest) => {
   const row = getUpstream(Number(params.id))
-  if (!row) return fail('上游不存在')
+  if (!row) return fail('服务商不存在')
   try {
     const res = await callUpstream(row, '/models')
-    if (!res.ok) return fail(`上游返回 ${res.status}，这个上游可能不支持列出模型`)
+    if (!res.ok) return fail(`服务商返回 ${res.status}，这个服务商可能不支持列出模型`)
     const json = (await res.json()) as { data?: { id?: unknown }[] }
     const ids = (json.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string')
     return ok(ids.sort())
   } catch (error) {
-    return fail(`连接上游失败：${describeError(error)}`)
+    return fail(`连接服务商失败：${describeError(error)}`)
   }
 })
 

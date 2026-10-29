@@ -71,7 +71,7 @@ export function resolveAlias(auth: GatewayAuth, model: unknown): RouteTarget {
 
   const upstream = getUpstream(alias.upstream_id)
   if (!upstream || upstream.status !== 1) {
-    throw new GatewayError('upstream_unavailable', 'upstream_disabled', `模型别名 ${model} 的上游已停用`)
+    throw new GatewayError('upstream_unavailable', 'upstream_disabled', `模型别名 ${model} 的服务商已停用`)
   }
   return { alias: model, upstream, upstreamModel: alias.upstream_model }
 }

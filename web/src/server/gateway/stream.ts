@@ -87,7 +87,7 @@ class UsageTap {
       }
       case 'error': {
         const error = event.error as Json | undefined
-        this.outcome.error = `上游流内错误：${String(error?.message ?? '')}`.slice(0, 300)
+        this.outcome.error = `服务商流内错误：${String(error?.message ?? '')}`.slice(0, 300)
         break
       }
     }
@@ -108,12 +108,12 @@ class UsageTap {
         if (usage) this.outcome.usage = { input: Number(usage.input_tokens ?? 0), output: Number(usage.output_tokens ?? 0) }
         if (event.type === 'response.failed') {
           const error = response?.error as Json | undefined
-          this.outcome.error = `上游返回 response.failed：${String(error?.message ?? '')}`.slice(0, 300)
+          this.outcome.error = `服务商返回 response.failed：${String(error?.message ?? '')}`.slice(0, 300)
         }
         break
       }
       case 'error':
-        this.outcome.error = `上游流内错误：${String(event.message ?? event.code ?? '')}`.slice(0, 300)
+        this.outcome.error = `服务商流内错误：${String(event.message ?? event.code ?? '')}`.slice(0, 300)
         break
     }
   }
@@ -123,7 +123,7 @@ class UsageTap {
     if (usage) this.outcome.usage = { input: Number(usage.prompt_tokens ?? 0), output: Number(usage.completion_tokens ?? 0) }
     if (chunk.error) {
       const error = chunk.error as Json
-      this.outcome.error = `上游流内错误：${String(error.message ?? '')}`.slice(0, 300)
+      this.outcome.error = `服务商流内错误：${String(error.message ?? '')}`.slice(0, 300)
     }
     const delta = (chunk.choices as Json[] | undefined)?.[0]?.delta as Json | undefined
     if (!delta) return
@@ -205,7 +205,7 @@ export function relayStream(
         if (ended) return
         stopUpstream()
         const timedOut = error instanceof IdleTimeout
-        const message = timedOut ? '上游长时间没有返回数据' : '与上游的连接中断'
+        const message = timedOut ? '服务商长时间没有返回数据' : '与服务商的连接中断'
         controller.enqueue(errorEvent(options.kind, timedOut ? 'upstream_timeout' : 'upstream_error', message))
         end({ error: message, timedOut })
         controller.close()
