@@ -22,15 +22,12 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  ListOrdered,
-  Shuffle,
   SlidersHorizontal,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { BadgeListCell } from '@/components/data-table'
-import { ProviderBadge } from '@/components/provider-badge'
 import { StatusBadge } from '@/components/status-badge'
 import { TableId } from '@/components/table-id'
 import { TruncatedText } from '@/components/truncated-text'
@@ -47,16 +44,10 @@ import { formatTimestampToDate } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
 import { truncateText } from '@/lib/utils'
 
-import {
-  CHANNEL_STATUS_CONFIG,
-  CHANNEL_TYPE_TASK_PLUGIN,
-  MODEL_FETCHABLE_TYPES,
-} from '../constants'
+import { CHANNEL_STATUS_CONFIG } from '../constants'
 import {
   formatRelativeTime,
   formatResponseTime,
-  getChannelTypeIcon,
-  getChannelTypeLabel,
   getResponseTimeConfig,
   isMultiKeyChannel,
   parseModelsList,
@@ -66,36 +57,14 @@ import {
 } from '../lib'
 import { parseUpstreamUpdateMeta } from '../lib/upstream-update-utils'
 import type { Channel } from '../types'
-import { TaskPluginChannelBadge } from './channel-type-badge'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
-
-function parseIonetMeta(otherInfo: string | null | undefined): null | {
-  source?: string
-  deployment_id?: string
-} {
-  if (!otherInfo) {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(otherInfo)
-    if (parsed && typeof parsed === 'object') {
-      return parsed
-    }
-  } catch {
-    return null
-  }
-  return null
-}
 
 /**
  * Upstream update tags (+N / -N) shown on channel name for model-fetchable channels
  */
 function UpstreamUpdateTags({ channel }: { channel: Channel }) {
   const { upstream, setCurrentRow } = useChannels()
-  if (!MODEL_FETCHABLE_TYPES.has(channel.type)) {
-    return null
-  }
 
   const meta = parseUpstreamUpdateMeta(channel.settings)
   if (!meta.enabled) {
@@ -334,146 +303,23 @@ export function useChannelsColumns(
         minSize: 200,
       },
 
-      // Type column
+      // Conduit: 类型列换成协议列。上游不区分服务商，协议决定网关是直接透传还是转换
       {
-        accessorKey: 'type',
-        header: t('Type'),
+        accessorKey: 'protocol',
+        header: t('Protocol'),
         cell: ({ row }) => {
-          const isTagRow = isTagAggregateRow(row.original)
-
-          if (isTagRow) {
-            return (
-              <StatusBadge
-                label={t('Tag Aggregate')}
-                variant='blue'
-                size='sm'
-                copyable={false}
-                className='-ml-1.5'
-              />
-            )
-          }
-
-          const type = row.getValue('type') as number
-          const typeNameKey = getChannelTypeLabel(type)
-          const typeName = t(typeNameKey)
-          const iconName = getChannelTypeIcon(type)
-          const channel = row.original as Channel
-          const isMultiKey = isMultiKeyChannel(channel)
-          const multiKeyMode = channel.channel_info?.multi_key_mode ?? 'random'
-          const MultiKeyModeIcon =
-            multiKeyMode === 'random' ? Shuffle : ListOrdered
-          const multiKeyTooltip =
-            multiKeyMode === 'random'
-              ? t('Multi-key: Random rotation')
-              : t('Multi-key: Polling rotation')
-
-          const ionetMeta = parseIonetMeta(channel.other_info)
-          const isIonet = ionetMeta?.source === 'ionet'
-          const deploymentId =
-            typeof ionetMeta?.deployment_id === 'string'
-              ? ionetMeta?.deployment_id
-              : undefined
-
+          const protocol = (row.original as Channel).protocol
+          if (!protocol) return null
           return (
-            <div className='flex max-w-full min-w-0 items-center gap-2 overflow-hidden'>
-              {isMultiKey && (
-                <TooltipProvider delay={100}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className='border-border bg-muted text-primary inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border' />
-                      }
-                    >
-                      <MultiKeyModeIcon className='h-3 w-3' />
-                    </TooltipTrigger>
-                    <TooltipContent side='top'>
-                      {multiKeyTooltip}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {type === CHANNEL_TYPE_TASK_PLUGIN ? (
-                <TaskPluginChannelBadge
-                  pluginKey={
-                    parseChannelSettings(channel.setting)?.task_plugin_key
-                  }
-                />
-              ) : (
-                <TooltipProvider delay={300}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <div className='max-w-full min-w-0 overflow-hidden' />
-                      }
-                    >
-                      <ProviderBadge
-                        iconKey={`${iconName}.Color`}
-                        iconSize={18}
-                        label={typeName}
-                        colorText={false}
-                        copyable={false}
-                        showDot={false}
-                        className='max-w-full min-w-0 overflow-hidden'
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side='top'>{typeName}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              {isIonet && (
-                <TooltipProvider delay={100}>
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          className='flex cursor-pointer items-center gap-1.5 text-xs font-medium'
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (!deploymentId) {
-                              return
-                            }
-                            const targetUrl = `/models/deployments?dFilter=${encodeURIComponent(String(deploymentId))}`
-                            window.open(targetUrl, '_blank', 'noopener')
-                          }}
-                        />
-                      }
-                    >
-                      <StatusBadge
-                        label='IO.NET'
-                        variant='purple'
-                        size='sm'
-                        copyable={false}
-                        className='cursor-pointer'
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent side='top'>
-                      <div className='max-w-xs space-y-1'>
-                        <div className='text-xs'>
-                          {t('From IO.NET deployment')}
-                        </div>
-                        {deploymentId && (
-                          <div className='text-muted-foreground font-mono text-xs'>
-                            {t('Deployment ID')}: {deploymentId}
-                          </div>
-                        )}
-                        <div className='text-muted-foreground text-xs'>
-                          {t('Click to open deployment')}
-                        </div>
-                      </div>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
+            <StatusBadge
+              label={protocol === 'responses' ? 'Responses' : 'Chat'}
+              variant={protocol === 'responses' ? 'blue' : 'neutral'}
+              size='sm'
+              copyable={false}
+            />
           )
         },
-        filterFn: (row, id, value) => {
-          if (!value || value.length === 0 || value.includes('all')) {
-            return true
-          }
-          return value.includes(String(row.getValue(id)))
-        },
-        size: 220,
+        size: 120,
         enableSorting: false,
       },
 

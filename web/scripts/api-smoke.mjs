@@ -76,15 +76,21 @@ console.log('\n上游')
 
 const noKey = await call('POST', '/api/channel', {
   mode: 'single',
-  channel: { name: 'smoke-up', type: 1, base_url: 'https://example.com/v1' },
+  channel: { name: 'smoke-up', protocol: 'chat', base_url: 'https://example.com/v1' },
 })
 check('没填密钥被拒', !noKey.success, noKey)
+
+const noProtocol = await call('POST', '/api/channel', {
+  mode: 'single',
+  channel: { name: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x' },
+})
+check('没选协议被拒', !noProtocol.success, noProtocol)
 
 const upstream = await call('POST', '/api/channel', {
   mode: 'single',
   channel: {
     name: 'smoke-up',
-    type: 1,
+    protocol: 'chat',
     base_url: 'https://example.com/v1/',
     key: 'sk-upstream-secret-1234',
     models: 'model-a,model-b',

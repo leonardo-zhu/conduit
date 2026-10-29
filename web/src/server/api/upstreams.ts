@@ -36,8 +36,8 @@ export interface UpstreamRow {
 export type UpstreamProtocol = 'responses' | 'chat'
 const PROTOCOLS = new Set<UpstreamProtocol>(['responses', 'chat'])
 
-/** Conduit 支持的类型：1 OpenAI 兼容，8 自定义，45 火山方舟，35 MiniMax */
-const UPSTREAM_TYPES = new Set([1, 8, 45, 35])
+/** upstreams.type 是 NewAPI 的渠道类型，Conduit 不区分服务商，新建时固定写 1，不再读写 */
+const LEGACY_TYPE = 1
 const UPSTREAM_STATUS = { ENABLED: 1, DISABLED: 2 } as const
 const TEST_TIMEOUT_MS = 20_000
 
@@ -105,21 +105,17 @@ function listUpstreams(query: URLSearchParams) {
   const rows = db()
     .prepare(`SELECT * FROM upstreams ${where} ORDER BY id`)
     .all(...args) as unknown as UpstreamRow[]
-  const typeCounts: Record<string, number> = {}
-  for (const r of rows) typeCounts[r.type] = (typeCounts[r.type] ?? 0) + 1
   const used = usedTokens()
   return ok({
     items: rows.slice(offset, offset + size).map((r) => toChannel(r, used.get(r.id))),
     total: rows.length,
     page,
     page_size: size,
-    type_counts: typeCounts,
   })
 }
 
 interface ChannelInput {
   name?: unknown
-  type?: unknown
   base_url?: unknown
   key?: unknown
   models?: unknown
@@ -139,11 +135,7 @@ function readUpstreamInput(body: unknown, partial: boolean) {
     if (!name) return { error: '请填写名称' }
     fields.name = name
   }
-  if (has('type')) {
-    const type = Number(input.type)
-    if (!UPSTREAM_TYPES.has(type)) return { error: '不支持的上游类型' }
-    fields.type = type
-  }
+  if (!partial) fields.type = LEGACY_TYPE
   if (has('base_url')) {
     const baseUrl = typeof input.base_url === 'string' ? input.base_url.trim().replace(/\/+$/, '') : ''
     if (!/^https?:\/\/\S+$/.test(baseUrl)) return { error: '请填写上游地址（http:// 或 https:// 开头）' }
@@ -168,11 +160,10 @@ function readUpstreamInput(body: unknown, partial: boolean) {
     fields.status = status === UPSTREAM_STATUS.ENABLED ? UPSTREAM_STATUS.ENABLED : UPSTREAM_STATUS.DISABLED
   }
   if (has('remark')) fields.remark = typeof input.remark === 'string' ? input.remark.slice(0, 255) : ''
+  // 协议不按服务商推断：新建时必须指定，编辑时没传就不改
   if (has('protocol')) {
-    // 新建时没传：火山方舟默认原生 Responses，其余默认 Chat
-    const protocol = input.protocol ?? (fields.type === 45 ? 'responses' : 'chat')
-    if (!PROTOCOLS.has(protocol as UpstreamProtocol)) return { error: '协议只能是 responses 或 chat' }
-    fields.protocol = protocol as string
+    if (!PROTOCOLS.has(input.protocol as UpstreamProtocol)) return { error: '请选择协议：responses 或 chat' }
+    fields.protocol = input.protocol as string
   }
   return { fields }
 }
@@ -349,6 +340,3 @@ route('GET', '/api/channel/models_enabled', () => {
   return ok(rows.map((r) => r.name))
 })
 
-route('GET', '/api/channel/default_base_urls', () =>
-  ok({ 1: 'https://api.openai.com/v1', 45: 'https://ark.cn-beijing.volces.com/api/v3' })
-)

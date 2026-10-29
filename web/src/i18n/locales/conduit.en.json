@@ -115,5 +115,10 @@
   "Upstream errors, quota usage and failure spikes": "Upstream errors, quota usage and failure spikes",
   "Mark all as read": "Mark all as read",
   "No alerts": "No alerts",
-  "{{count}} times": "{{count}} times"
+  "{{count}} times": "{{count}} times",
+  "Please choose a protocol": "Please choose a protocol",
+  "Choose a protocol": "Choose a protocol",
+  "Please enter the base URL": "Please enter the base URL",
+  "e.g. Main upstream": "e.g. Main upstream",
+  "Model name as the upstream expects it": "Model name as the upstream expects it"
 }
