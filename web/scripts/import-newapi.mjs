@@ -2,10 +2,10 @@
 /**
  * 把 NewAPI 的令牌导入 Conduit：密钥只存哈希，格式不变（sk-...），接入方不用换令牌。
  *
- * NewAPI 库里存的是令牌明文。先把 R4S 上的 /opt/conduit/new-api/data/one-api.db 拷一份出来，
- * 对拷贝运行（只读打开，不改 NewAPI 的库）。默认只打印计划，加 --apply 才写入。
+ * NewAPI 库里存的是令牌明文。脚本先把 one-api.db（连同 -wal）拷到临时目录再读，
+ * 不碰 NewAPI 正在用的库，NewAPI 运行中也可以执行。默认只打印计划，加 --apply 才写入。
  *
- *   node scripts/import-newapi.mjs ./one-api.db                       # 预览
+ *   node scripts/import-newapi.mjs ./one-api.db                       # 预览（服务器上的用法见 docs/setup.md）
  *   node scripts/import-newapi.mjs ./one-api.db --map root=vita       # NewAPI 用户 root 的令牌归到应用 vita
  *   node scripts/import-newapi.mjs ./one-api.db --map root=vita --apply
  *
@@ -19,7 +19,8 @@
  * - 禁用的令牌保持禁用；过期时间、创建和最近使用时间照搬。
  */
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -49,7 +50,13 @@ if (!existsSync(targetPath)) {
   process.exit(1)
 }
 
-const newapi = new DatabaseSync(source, { readOnly: true })
+// 拷一份再读：NewAPI 用 WAL 模式，直接只读打开正在写的库可能因为没有 -shm 的写权限而失败
+const workDir = mkdtempSync(path.join(tmpdir(), 'newapi-import-'))
+const copy = path.join(workDir, 'one-api.db')
+copyFileSync(source, copy)
+if (existsSync(`${source}-wal`)) copyFileSync(`${source}-wal`, `${copy}-wal`)
+process.on('exit', () => rmSync(workDir, { recursive: true, force: true }))
+const newapi = new DatabaseSync(copy)
 const conduit = new DatabaseSync(targetPath)
 conduit.exec('PRAGMA foreign_keys = ON')
 
