@@ -8,7 +8,7 @@
  * 调用方断开（499）和参数错误（4xx）是调用方的问题，不算异常。
  */
 import { db, nowSeconds } from '../db'
-import { safeRaiseEvent } from '../events'
+import { safeRaiseEvent, type EventField } from '../events'
 import type { GatewayAuth, RouteTarget } from './context'
 
 const FAILING_STREAK = 3
@@ -36,6 +36,10 @@ const logsLink = (params: Record<string, string | number>) =>
   `/usage-logs/common?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`
 
 const formatTokens = (n: number) => n.toLocaleString('en-US')
+const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`
+
+/** handler.ts 记的上游错误是“上游返回 401：<响应正文>”，推送时只要正文 */
+const upstreamBody = (error: string) => error.replace(/^上游返回 \d+：/, '').slice(0, 500)
 
 export interface RequestOutcome {
   auth: GatewayAuth
@@ -56,9 +60,11 @@ export function checkAfterRequest(outcome: RequestOutcome) {
   }
 }
 
-function checkUpstream({ target, statusCode, error }: RequestOutcome) {
+function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
   const { upstream } = target
   const base = { subjectType: 'upstream' as const, subjectId: upstream.id, subjectName: upstream.name }
+  // 是哪个请求撞上的，方便判断影响面
+  const trigger: EventField = ['触发请求', `${auth.app.slug} / ${target.alias} → ${target.upstreamModel}`]
 
   if (statusCode === 200 && !error) {
     failStreak.delete(upstream.id)
@@ -72,6 +78,8 @@ function checkUpstream({ target, statusCode, error }: RequestOutcome) {
       title: `上游 ${upstream.name} 拒绝了密钥（${statusCode}）`,
       detail: `密钥可能失效、欠费或没有这个模型的权限。${error}`.slice(0, 500),
       link: '/channels',
+      fields: [['上游', upstream.name], ['状态码', String(statusCode)], trigger, ['可能原因', '密钥失效、欠费或没有这个模型的权限']],
+      raw: upstreamBody(error),
     })
     return
   }
@@ -83,6 +91,8 @@ function checkUpstream({ target, statusCode, error }: RequestOutcome) {
       title: `上游 ${upstream.name} 限流（429）`,
       detail: error.slice(0, 500),
       link: logsLink({ channel: upstream.id }),
+      fields: [['上游', upstream.name], ['状态码', '429'], trigger],
+      raw: upstreamBody(error),
     })
     return
   }
@@ -97,6 +107,8 @@ function checkUpstream({ target, statusCode, error }: RequestOutcome) {
         title: `上游 ${upstream.name} 连续 ${streak} 次失败`,
         detail: `最近一次：${error}`.slice(0, 500),
         link: logsLink({ channel: upstream.id }),
+        fields: [['上游', upstream.name], ['连续失败', `${streak} 次`], ['状态码', String(statusCode)], trigger],
+        raw: upstreamBody(error),
       })
     }
   }
@@ -151,10 +163,22 @@ function quotaCrossing(args: {
   const before = used - charge
   const detail = `额度 ${formatTokens(quota)} tokens，已用 ${formatTokens(used)}`
   const base = { subjectType: args.subjectType, subjectId: args.subjectId, subjectName: args.subjectName, link: args.link }
+  const fields: EventField[] = [
+    [args.subjectType === 'app' ? '应用' : '令牌', args.subjectName],
+    ['额度', `${formatTokens(quota)} tokens`],
+    ['已用', `${formatTokens(used)} tokens（${percent(used, quota)}）`],
+  ]
   if (before < quota && used >= quota) {
-    safeRaiseEvent({ ...base, kind: 'quota_exhausted', level: 'error', title: `${args.label} 的额度已用尽`, detail })
+    safeRaiseEvent({
+      ...base,
+      kind: 'quota_exhausted',
+      level: 'error',
+      title: `${args.label} 的额度已用尽`,
+      detail,
+      fields: [...fields, ['影响', '之后的请求会被拒绝（429）']],
+    })
   } else if (before < quota * QUOTA_WARNING_RATIO && used >= quota * QUOTA_WARNING_RATIO) {
-    safeRaiseEvent({ ...base, kind: 'quota_warning', level: 'warning', title: `${args.label} 的额度已用 80%`, detail })
+    safeRaiseEvent({ ...base, kind: 'quota_warning', level: 'warning', title: `${args.label} 的额度已用 80%`, detail, fields })
   }
 }
 
@@ -162,15 +186,20 @@ function quotaCrossing(args: {
 export function noteQuotaRejected(auth: GatewayAuth, scope: 'app' | 'token') {
   const isApp = scope === 'app'
   const label = isApp ? `应用 ${auth.app.slug}` : `令牌 ${auth.app.slug} / ${auth.token.name}`
+  const name = isApp ? auth.app.slug : `${auth.app.slug} / ${auth.token.name}`
   safeRaiseEvent({
     kind: 'quota_exhausted',
     level: 'error',
     subjectType: scope,
     subjectId: isApp ? auth.app.id : auth.token.id,
-    subjectName: isApp ? auth.app.slug : `${auth.app.slug} / ${auth.token.name}`,
+    subjectName: name,
     title: `${label} 的额度已用尽`,
     detail: '额度用尽后被拒绝的请求也计入次数',
     link: isApp ? '/apps' : '/keys',
+    fields: [
+      [isApp ? '应用' : '令牌', name],
+      ['影响', '请求被拒绝（429），调整额度或等下个周期重置'],
+    ],
   })
 }
 
@@ -198,5 +227,10 @@ function checkErrorRate(auth: GatewayAuth) {
     title: `应用 ${auth.app.slug} 的请求大量失败`,
     detail: `最近 10 分钟 ${stats.total} 个请求，${stats.failed} 个因上游问题失败`,
     link: logsLink({ username: auth.app.slug }),
+    fields: [
+      ['应用', auth.app.slug],
+      ['最近 10 分钟', `${stats.total} 个请求`],
+      ['上游类失败', `${stats.failed} 个（${percent(stats.failed, stats.total)}）`],
+    ],
   })
 }
