@@ -1,6 +1,6 @@
 # 自建网关进度记录
 
-最后更新：2026-10-30（上线后的第一轮修改；上游接口和 Anthropic 支持在 PR leonardo-zhu/conduit#4，等合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-30（PR #4 已合并；控制台整理和密钥并入应用在分支 `feat/console-cleanup`，等合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
 ## 当前状态（2026-10-30）
 
@@ -10,22 +10,28 @@
 - **提交约定**（git-identity 2.2，agent-skills PR #24 已合并）：提交说明一律英文 Conventional Commits，末尾依次是 bot、用户、Claude 三行署名。改动走分支 + PR，用户 review 合并后自动部署。git-identity 等 skill **不能直接改 `~/.claude/skills/`**，要在 `~/Agent/Skills` 仓库改、开 PR。
 - PR leonardo-zhu/conduit#3 已合并部署：Passkey 弹窗和全站输入框关掉浏览器自动填充（上游密钥改成文本框加遮盖）；去掉上游的“类型”和所有按服务商的默认值；README 补全功能和提交约定。
 - 最近一轮修 bug 的提交（`dc03dad`..`407e719`）：令牌抽屉死循环、删除二次验证残留、复制上游去掉重置余额、错误页去掉 NewAPI 反馈按钮、概览余额改为各应用汇总、看板“分流”去掉节点和分组层并把“用户”改称“应用”、日志显示“估算”且中途断开的请求算作消耗、应用页“最后登录”改“最近请求”、顶栏去掉通知和“主页”“控制台”、去掉主题设置面板（跟随系统深浅色）。
-- 顶栏铃铛已恢复，改为**网关事件提醒**（`3b4fab7`..`c2bcd5e`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
+- 顶栏铃铛已恢复，改为**网关事件提醒**（`3b4fab7`..`c2bcd5e`）：上游 401/403、429、连续失败，应用额度越过 80% / 100%（原来也包括令牌，`feat/console-cleanup` 起只有应用），错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
 - 被删的界面功能用户确认都不恢复（2026-10-29）：顶栏“主页”“控制台”、错误页反馈按钮、分流图的节点和分组层、复制上游的“重置余额”、“最后登录”、搜索面板的深浅色切换、主题偏好。顶部导航和没用到的公开页布局代码已删（`658c01e`）。语言切换保留。
 
-### 进行中：PR leonardo-zhu/conduit#4（分支 `feat/upstream-endpoints`，3 个提交，等用户 review 合并）
+- PR leonardo-zhu/conduit#4 已合并（2026-10-29）：上游不区分服务商，按协议配地址。OpenAI 兼容地址必填，Chat Completions 始终提供，Responses API 开关 + 原生 / 转换；Anthropic 兼容地址选填，`/v1/messages` 直接转发、永不和 OpenAI 格式互转。迁移 5、6。**还没用真实的 Anthropic 上游测过。**
 
-上游不区分服务商，按协议配地址，应用自己选调哪个入口：
+### 进行中：分支 `feat/console-cleanup`（等用户 review 合并）
 
-- **OpenAI 兼容地址**（必填）：Chat Completions 始终提供；Responses API 用开关决定是否提供（默认关），打开后选原生支持（默认）或网关转换
-- **Anthropic 兼容地址**（选填）：填了就提供 `/v1/messages`，直接转发到 `<地址>/v1/messages`，**永远不和 OpenAI 格式互转**（用户定的）
-- 网关：`/v1/responses` 在上游不提供时返回 400 `responses_not_supported`；新增 `/v1/messages`（应用令牌认 Bearer 或 `x-api-key`，转发时带 `x-api-key` + Bearer 和客户端的 `anthropic-version` / `anthropic-beta`，按 Anthropic 用量记账、缓存 token 算输入，错误用 Anthropic 格式）
-- 迁移 5 加 `responses_mode`（已有上游按旧 `protocol` 映射：responses → native，chat → convert），迁移 6 加 `anthropic_base_url`（空）。部署后线上行为不变
-- 本地验证：类型检查、`api-smoke`、`gateway-smoke`（含新加的 Anthropic 检查）都通过，抽屉三种状态在浏览器里试过。**还没用真实的 Anthropic 上游测过**
+用户 2026-10-30 在本地看界面后定的：
+
+- **“上游”在界面上改称“服务商”**（英文 Providers），只改文案（翻译替换规则、管理接口报错、提醒、网关报错文字）；错误码、表名、代码标识符仍叫 upstream。
+- **侧栏按用途分组**：“使用情况”（概览、看板、日志）和“配置”（服务商、应用），不再分“常规 / 管理员”。
+- **API 密钥并入应用抽屉**，去掉独立页面。密钥只有名称、过期时间、IP 白名单（IP 白名单没讨论过，先保留）；**没有自己的额度和模型白名单**，能用应用的全部别名，额度只在应用上。迁移 7 清掉旧的令牌额度和白名单；额度提醒只针对应用。
+- **服务商标识 + 直接调用（方案 C）**：服务商加必填唯一的 `slug`（迁移 8，已有的按名称生成），请求可写 `标识/模型名`（如 `minimax/MiniMax-M2`）不配别名，模型名原样转发；别名照旧（不含 `/`）。`/v1/models` 加上启用服务商模型列表里的 `标识/模型名`。代价：任何密钥都能调任何启用的服务商（用户接受）。**部署后提醒用户把自动生成的标识改短（如 `ark`）。**
+- **NewAPI 署名挪进头像菜单 →“关于”**（加了本项目源码链接）。用户本想删，因为仓库公开、NOTICE 的 7(b) 附加条款要求界面上保留，最后选了“关于”弹窗；**不能只写在 README 里**。
+- 应用列表“可用余额”改成“用量 / 额度”带进度条（不限时显示“不限”）。
+- 语言默认跟随浏览器：检测结果不再写 localStorage，只存手动选择；语言菜单加“跟随系统”；`en-*` 归到 en、所有 `zh-*` 归到简体。
+- 上游卡片名称放到最上面。用户说开发模式的 Next.js “N” 圆钮无所谓，没动。
+- 验证：类型检查、`api-smoke`、`gateway-smoke` 通过，浏览器里试过密钥新建 / 删除、关于弹窗、服务商标识字段、跟随系统。
 
 ### 下次先做
 
-1. 用户合并 PR #4 后确认部署成功（CI 跑完、`docker compose ps`、登录页 200）。
+1. 用户合并 `feat/console-cleanup` 的 PR 后确认部署成功（CI 跑完、`docker compose ps`、登录页 200），提醒用户在后台把服务商标识改短。
 2. 用真实上游测：OpenAI 兼容地址下 Responses 原生 / 转换两种；Anthropic 兼容地址（如 MiniMax `https://api.minimaxi.com/anthropic`、方舟 Coding Plan `…/api/coding`）用 Claude Code 试一次（`ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。
 3. 用户在线上测试、切 Vita，按用户指出的具体问题修 bug，**不要逐页巡检**。
 4. 对照上游控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
@@ -35,12 +41,13 @@
 - **agent-skills 的 Deploy Skills 工作流一直失败**：部署目标是已经撤掉的 do-sg（`DEPLOY_SSH_HOST` 解析不了）。合并 skill 的 PR 后要在本机手动 `TARGET_HOME=$HOME ~/Agent/Skills/install.sh`；R4S 上 OpenClaw 的 skill 目前没人更新。要不要把工作流改成部署到 R4S，等用户定。
 - 本机 `web/.env.local` 里复制了一份 OpenClaw 默认机器人的令牌做测试（用户同意的），推送目标是 Daily Briefing 频道。
 - `git stash` 里留着一条已被 PR #4 取代的提示文字修改（`stash@{0}`），可以删。
+- 可能要做（用户没要求）：应用“手动清零已用量”按钮；按月重置的时间按服务器时区（容器多半是 UTC），要不要固定成北京时间。
 
 ## 已完成
 
 ### 阶段 1：管理后台界面（`web/`，Next.js 16 App Router）
 
-- NewAPI 前端（`reference/new-api/web`，AGPL-3.0）拷入并删减。`web/LICENSE`、`web/NOTICE`、原文件版权头、侧边栏署名都要保留；修改记录在 `web/README.md`。
+- NewAPI 前端（`reference/new-api/web`，AGPL-3.0）拷入并删减。`web/LICENSE`、`web/NOTICE`、原文件版权头、界面上的署名（头像菜单 → 关于）都要保留；修改记录在 `web/README.md`。
 - `src/lib/router.tsx`：TanStack Router → Next.js 的兼容层，原文件只改了 import。
 - 保留的页面：登录、概览、数据看板、令牌（`/keys`）、使用日志、渠道（`/channels`）、应用（`/apps`，原“用户”）、错误页。
 - 按 Conduit 的模型改过的地方：
