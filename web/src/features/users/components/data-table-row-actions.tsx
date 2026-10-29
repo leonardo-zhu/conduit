@@ -74,7 +74,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         toast.success(t(getUserActionMessage(action)))
         triggerRefresh()
       } else {
-        handleServerError(result, t('Failed to {{action}} user', { action }))
+        handleServerError(result, t('Failed to update the app'))
       }
     } catch (error) {
       handleServerError(

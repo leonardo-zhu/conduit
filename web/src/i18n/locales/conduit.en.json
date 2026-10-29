@@ -149,5 +149,12 @@
   "Follow system": "Follow system",
   "Usage / Quota": "Usage / Quota",
   "Used this month": "Used this month",
-  "Used in total": "Used in total"
+  "Used in total": "Used in total",
+  "App Information": "App Information",
+  "All apps": "All apps",
+  "No apps": "No apps",
+  "Filter by app ID": "Filter by app ID",
+  "No Apps Found": "No Apps Found",
+  "No apps yet, or none match your search or filters.": "No apps yet, or none match your search or filters.",
+  "Failed to update the app": "Failed to update the app"
 }
