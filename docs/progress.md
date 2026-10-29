@@ -1,6 +1,6 @@
 # 自建网关进度记录
 
-最后更新：2026-10-29（阶段 3 网关数据面做完，未接真实上游验证）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-29（阶段 4 的镜像、compose、CI 做完，还没部署到 R4S）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
 ## 当前状态
 
@@ -11,6 +11,7 @@
   - `6dc9f62`..`e91bbc2`：Passkey 登录（接口、/api/status、管理弹窗、删掉 /otp）。
   - `5634f56`..`fc4b8ff`：数据表、管理接口改为真实实现、前端按新模型调整、示例数据和 NewAPI 导入脚本。
   - `4151840`..`c751b4d`：网关数据面（/v1/*）、上游协议字段、网关冒烟测试。
+  - `7605ce8`..`4d0011c`：Docker 镜像、compose 和 CI 加入 web 服务（默认不启动）、部署文档。
 
 ## 已完成
 
@@ -86,6 +87,15 @@
 - 已验证（`scripts/gateway-smoke.mjs` + `scripts/mock-upstream.mjs`，44 项）：阶段 3 验证清单的三项都过了——流式用量与上游一致；调用方断开时上游连接立即被中止、只按已收到的输出扣；20 个并发请求扣减正好 20 × 15。另有鉴权、白名单、额度、转换（文本、`<think>`、tool call、tools 格式）和错误格式。
 - **没有对真实上游验证过**：火山方舟、MiniMax、Nous 都只用假上游测过。部署前要用真实密钥各跑一遍（流式文本、tool call、图片输入）。
 
+### 阶段 4 的准备：镜像、compose、CI（未部署）
+
+- `web/Dockerfile`：Node 24 Alpine，两阶段构建，只带 standalone 产物、静态文件和 NewAPI 导入脚本，以 node 用户（uid 1000）运行，默认监听 127.0.0.1:3012，数据在 `/data`。
+- 构建产物曾经把本地 `.data/conduit.db`、`src`、`scripts` 一起打包（文件追踪看到了 `path.resolve('.data')`），已在 `next.config.ts` 排除，`.dockerignore` 也排除了 `.data` 和 `.env*`。
+- `compose.yaml` 的 `web` 服务放在 profile `web` 里：服务器 `.env` 加 `COMPOSE_PROFILES=web` 才会启动，合并到 master 不影响现在的 new-api 和 adapter。`mem_limit: 256m`。
+- CI 同时构建 `ghcr.io/leonardo-zhu/conduit-web`。Caddy 片段里并行验证期间用 `conduit-next.r4s.leonardo-zhu.me`。
+- 本机 arm64 容器实测：空闲约 57MB，300 个流式请求压测后稳定在约 93MB（macOS 上直接跑 Node 是 110–190MB，以容器的数字为准）。三套冒烟测试在容器里全部通过。
+- 启用步骤（web.env、数据目录、Caddy、导入令牌、切换、回退）写在 `docs/setup.md` 的“启用自建服务”。
+
 ## 还没做的
 
 ### 前端收尾（阶段 1）
@@ -115,7 +125,7 @@
 
 ### 阶段 4–5
 
-- 部署：Next.js standalone 的 ARM 镜像、compose、CI 改为构建新服务，实测内存（预算 100–150MB）。
+- 按 `docs/setup.md` 在 R4S 上启用 web（需要你在服务器上建 web.env、数据目录、改 Caddy，并把分支合并到 master），在 R4S 上实测内存。
 - 并行验证、切换 Vita、下线 NewAPI、更新 `docs/setup.md` 和 `docs/apps.md`。
 
 ## 本地开发
@@ -138,6 +148,7 @@ node scripts/seed-dev.mjs    # 另开终端，写入示例数据
 - **TypeScript 是 7.0（Go 原生版），没有 JS API**，需要分析代码的工具只能解析 `tsc` 的输出。
 - 假接口改了 `src/mock/data.ts` 后，热更新会重新执行 handler 文件；路由表按“方法 + 路径”覆盖注册，避免命中旧的那份。
 - **删掉页面后 `pnpm typecheck` 会报 `.next/types/validator.ts` 找不到模块**：dev 服务不会清理，跑 `pnpm exec next typegen` 重新生成。
+- **在 Mac 上跑容器测试时，宿主机读不到容器写的 SQLite**（WAL 的共享内存跨不过 Docker 的虚拟机），测试脚本要放进同一个 Docker 里跑，写法见 `scripts/gateway-smoke.mjs` 的注释。
 - **IP 白名单和登录限速按 `X-Forwarded-For` 的第一个地址判断**：只在 Caddy 后面才可信（Caddy 默认会丢掉不可信来源带的 XFF 重新设置）。服务端口不要直接暴露到公网。
 - **令牌白名单引用的别名不存在时，令牌在后台编辑会报错**：导入 NewAPI 令牌后先在应用里把别名补齐。
 - 改了会话 cookie 的签名格式（加了 `kind`），升级前发出的会话都失效，需要重新登录。
