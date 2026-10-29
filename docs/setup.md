@@ -8,6 +8,7 @@
 |---|---|---|
 | new-api | 384MB | Go 单进程 + SQLite，实际常驻预计远低于上限，上线后用 `docker stats` 实测 |
 | adapter | 128MB | Bun，无依赖 |
+| web | 256MB | 自建的后台 + 网关（Next.js standalone），并行验证期间才启用。本机容器实测空闲约 57MB、压测后约 93MB，R4S 上待实测 |
 
 R4S 没有 swap，可用内存约 1.8GB（2026-10-26 实测），所以两个容器都设了 `mem_limit`：超限时只杀掉这个容器，不会拖累路由和其他服务。
 
@@ -19,6 +20,7 @@ TF 卡写入：SQLite 在 `/opt/conduit/new-api/data`，用量通过 `BATCH_UPDA
 |---|---|---|
 | 3010 | new-api | 所有地址（NewAPI 不支持只绑 127.0.0.1） |
 | 3011 | adapter | 仅 127.0.0.1 |
+| 3012 | web | 仅 127.0.0.1（经 Caddy 访问；IP 白名单和登录限速信任 `X-Forwarded-For`，不能让外部直连） |
 
 ⚠️ R4S 的 WAN 方向放行了全部 IPv6，所以 3010 会以明文 HTTP 暴露在公网 IPv6 上，绕过 Caddy 的 TLS。上线前要决定是否在防火墙加一条只针对 3010 的拒绝规则（改防火墙需要先确认并备份 `/etc/config/firewall`）。
 
@@ -26,7 +28,7 @@ TF 卡写入：SQLite 在 `/opt/conduit/new-api/data`，用量通过 `BATCH_UPDA
 
 和 gh-mcp 一样走 GitHub Actions（`.github/workflows/deploy.yml`）：
 
-1. `build`：在 GitHub 的 arm64 runner 上构建 `adapter/`，推到 `ghcr.io/leonardo-zhu/conduit-adapter`（`latest` 和 commit sha 两个 tag）。
+1. `build`：在 GitHub 的 arm64 runner 上构建 `adapter/` 和 `web/`，推到 `ghcr.io/leonardo-zhu/conduit-adapter`、`ghcr.io/leonardo-zhu/conduit-web`（`latest` 和 commit sha 两个 tag）。
 2. `deploy`：在 R4S 的 self-hosted runner（标签 `self-hosted, r4s`）上，把仓库里的 `compose.yaml` 拷到 `/opt/stacks/conduit/`，然后 `docker compose pull && up -d`。
 
 `compose.yaml` 以仓库为准，服务器上的副本每次部署都会被覆盖；`.env` 只在服务器上维护，不进仓库。只改了文档（`*.md`、`docs/`）的提交不会触发部署。
@@ -117,3 +119,57 @@ curl https://conduit.r4s.leonardo-zhu.me/v1/responses -H "Authorization: Bearer 
   ```
 
   或者在 GitHub 上 revert 后重新推送。
+
+## 启用自建服务（web，并行验证）
+
+`compose.yaml` 里的 `web` 服务放在 profile `web` 里，默认不启动；下面这些做完之前，部署只会更新 new-api 和 adapter。web 和 NewAPI 同时运行、用不同的域名，Vita 继续走 NewAPI，直到验证通过再切换（见 `docs/rewrite-plan.md` 阶段 4、5）。
+
+1. **准备密钥**（在自己电脑上，进入仓库的 `web/` 目录）：
+
+   ```bash
+   node scripts/hash-password.mjs   # 生成 ADMIN_PASSWORD_HASH，密码至少 12 位
+   openssl rand -base64 32          # SESSION_SECRET
+   openssl rand -base64 32          # CONDUIT_MASTER_KEY，丢了的话所有上游密钥都要重填
+   ```
+
+2. **在 R4S 上建 env 文件和数据目录**（只在服务器上维护，不进仓库）：
+
+   ```bash
+   # /opt/stacks/conduit/web.env，权限 600
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD_HASH=scrypt:...
+   SESSION_SECRET=...
+   CONDUIT_MASTER_KEY=...
+   PASSKEY_ORIGIN=https://conduit-next.r4s.leonardo-zhu.me
+   ```
+
+   ```bash
+   mkdir -p /opt/conduit/web/data && chown 1000:1000 /opt/conduit/web/data   # 容器里是 node 用户
+   echo 'COMPOSE_PROFILES=web' >> /opt/stacks/conduit/.env
+   ```
+
+   env 文件里的值不能含 `$`（compose 会当变量展开）。
+
+3. **Caddy**：把 `deploy/Caddyfile.snippet` 里 `conduit-next.r4s…` 那一段加到 `/opt/stacks/caddy/Caddyfile`，先 `validate` 再 `reload`（命令见 R4S 的说明文档）。`*.r4s` 的 DDNS 和证书已经覆盖，不用另加 DNS。
+
+4. **部署**：推到 `master`，或在 GitHub 上手动运行 workflow。之后用 `docker stats --no-stream conduit-web` 记下实际内存。
+
+5. **配置**：打开 `https://conduit-next.r4s.leonardo-zhu.me`，用 web.env 里的账号登录。先在头像菜单里注册 Passkey（可选），再建上游（填真实密钥）、应用和别名。
+
+6. **导入 NewAPI 的令牌**（Vita 不用换令牌）。先预览，确认后加 `--apply`：
+
+   ```bash
+   cd /opt/stacks/conduit
+   docker compose run --rm --no-deps -v /opt/conduit/new-api/data:/newapi:ro web \
+     node scripts/import-newapi.mjs /newapi/one-api.db --map root=vita
+   ```
+
+   预览里列出的“应用里还没有的别名”要在后台补上；NewAPI 里有额度上限的令牌导入为不限，需要的话重新设。
+
+7. **验证**：用一个导入的令牌对 `https://conduit-next.r4s.leonardo-zhu.me/v1/responses` 发流式和非流式请求、带 tool call 的请求，在后台的使用日志里核对用量，再和上游控制台对账。
+
+### 切换和回退
+
+- 切换：Caddy 里把 `conduit.r4s…` 的 `reverse_proxy` 从 3010 改到 3012（Vita 的地址不变），`PASSKEY_ORIGIN` 改成 `https://conduit.r4s.leonardo-zhu.me` 并 `docker compose up -d web`。Passkey 绑定域名，切换后要重新注册。
+- 回退：把 Caddy 改回 3010 即可，NewAPI 一直在运行。
+- 观察一段时间没问题后，再从 `compose.yaml` 删掉 new-api 和 adapter（阶段 5）。
