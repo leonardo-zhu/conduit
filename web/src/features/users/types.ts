@@ -44,6 +44,8 @@ export const userSchema = z.object({
   email: z.string().optional(),
   quota: z.number(),
   used_quota: z.number(),
+  // Conduit: 额度周期，none 不重置 / month 每月 1 日重置
+  quota_period: z.enum(['none', 'month']).optional(),
   request_count: z.number(),
   group: z.string(),
   aff_code: z.string().optional(),
@@ -126,6 +128,15 @@ export interface UserFormData {
   group?: string // Only used when updating user
   remark?: string // Only used when updating user
   admin_permissions?: AdminPermissionMatrix
+  quota_period?: 'none' | 'month' // Conduit
+}
+
+/** Conduit: 应用下的模型别名，指向某个上游的某个模型 */
+export interface AppAlias {
+  name: string
+  upstream_id: number
+  upstream_model: string
+  upstream_name?: string
 }
 
 export type ManageUserAction =

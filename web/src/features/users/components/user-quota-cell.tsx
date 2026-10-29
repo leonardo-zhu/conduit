@@ -19,14 +19,15 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 
 import { QuotaDetailsPopover } from '@/components/quota-details-popover'
-import { StatusBadge } from '@/components/status-badge'
 import { formatQuotaWithCurrency, getCurrencyDisplay } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
+// Conduit: 应用的 quota 是总额度（0 不限），剩余 = 总额度 - 当前周期已用
 type UserQuotaCellProps = {
-  remaining: number
+  total: number
   used: number
+  period?: 'none' | 'month'
 }
 
 export function UserQuotaCell(props: UserQuotaCellProps) {
@@ -35,10 +36,11 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
 
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
-  const hasQuota = props.remaining !== 0 || props.used !== 0
-  const formattedRemaining = formatQuotaWithCurrency(props.remaining, {
-    showSymbol: false,
-  })
+  const unlimited = props.total === 0
+  const remaining = props.total - props.used
+  const formattedRemaining = unlimited
+    ? t('Unlimited')
+    : formatQuotaWithCurrency(remaining, { showSymbol: false })
   const formattedUsed = formatQuotaWithCurrency(props.used, {
     showSymbol: false,
   })
@@ -46,42 +48,31 @@ export function UserQuotaCell(props: UserQuotaCellProps) {
   return (
     <QuotaDetailsPopover
       title={`${t('Quota')} (${quotaUnit})`}
-      triggerLabel={
-        hasQuota
-          ? `${t('Available Balance')} ${formattedRemaining}; ${t('Used amount')} ${formattedUsed}`
-          : t('No Quota')
-      }
+      triggerLabel={`${t('Available Balance')} ${formattedRemaining}; ${t('Used amount')} ${formattedUsed}`}
       details={[
         { label: t('Available Balance'), value: formattedRemaining },
         { label: t('Total Used'), value: formattedUsed },
+        {
+          label: t('Quota period'),
+          value:
+            props.period === 'month'
+              ? t('Reset on the 1st of each month')
+              : t('Never reset'),
+        },
       ]}
     >
-      {hasQuota ? (
-        <span className='grid min-w-0 grid-cols-1 gap-y-1 text-sm tabular-nums'>
-          <span
-            className={cn(
-              props.remaining < 0 && 'text-destructive',
-              props.remaining === 0 && 'text-muted-foreground'
-            )}
-          >
-            {formattedRemaining}
-          </span>
-          <span
-            data-table-text='secondary'
-            className='text-muted-foreground flex items-baseline gap-1 text-xs font-normal'
-          >
-            <span>{t('Used amount')}</span>
-            <span>{formattedUsed}</span>
-          </span>
+      <span className='grid min-w-0 grid-cols-1 gap-y-1 text-sm tabular-nums'>
+        <span className={cn(!unlimited && remaining <= 0 && 'text-destructive')}>
+          {formattedRemaining}
         </span>
-      ) : (
-        <StatusBadge
-          label={t('No Quota')}
-          variant='neutral'
-          copyable={false}
-          className='-ml-1.5 font-normal'
-        />
-      )}
+        <span
+          data-table-text='secondary'
+          className='text-muted-foreground flex items-baseline gap-1 text-xs font-normal'
+        >
+          <span>{t('Used amount')}</span>
+          <span>{formattedUsed}</span>
+        </span>
+      </span>
     </QuotaDetailsPopover>
   )
 }
