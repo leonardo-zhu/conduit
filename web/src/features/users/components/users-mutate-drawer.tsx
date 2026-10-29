@@ -272,7 +272,7 @@ export function UsersMutateDrawer({
               <SideDrawerSectionHeader
                 title={t('Model aliases')}
                 description={t(
-                  'Keys of this app call these aliases; each points to a model of an upstream. Changing the target takes effect immediately.'
+                  'Optional. An alias is the app\'s own model name pointing to a provider model; repointing it takes effect immediately without changing the app.'
                 )}
                 icon={<Route className='size-4' />}
                 iconTone='success'
@@ -367,7 +367,7 @@ export function UsersMutateDrawer({
                   })}
                   {aliasFields.fields.length === 0 && (
                     <p className='text-muted-foreground rounded-md border border-dashed py-4 text-center text-sm'>
-                      {t('No aliases yet. Keys of this app cannot call any model until you add one.')}
+                      {t('No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.')}
                     </p>
                   )}
                   <Button
