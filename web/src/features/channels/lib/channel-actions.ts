@@ -34,7 +34,6 @@ import {
   batchSetChannelTag,
   enableTagChannels,
   disableTagChannels,
-  deleteDisabledChannels,
   fixChannelAbilities,
   editTagChannels,
   testAllChannels,
@@ -567,34 +566,6 @@ export async function handleDisableTagChannels(
 // ============================================================================
 
 /**
- * Delete all disabled channels
- */
-export async function handleDeleteAllDisabled(
-  queryClient?: QueryClient,
-  onSuccess?: (deletedCount: number) => void
-): Promise<void> {
-  try {
-    const response = await deleteDisabledChannels()
-    if (response.success) {
-      toast.success(
-        i18next.t('{{count}} disabled channel(s) deleted', {
-          count: response.data || 0,
-        })
-      )
-      queryClient?.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
-      onSuccess?.(response.data || 0)
-    } else {
-      handleServerError(
-        response,
-        i18next.t('Failed to delete disabled channels')
-      )
-    }
-  } catch (error) {
-    handleServerError(error, i18next.t('Failed to delete disabled channels'))
-  }
-}
-
-/**
  * Repair channel consistency
  */
 export async function handleFixAbilities(
@@ -626,29 +597,46 @@ export async function handleFixAbilities(
   }
 }
 
+function shortTestError(error: string): string {
+  const head = error.split(/：[{\[]/)[0]
+  return head.length > 60 ? `${head.slice(0, 60)}…` : head
+}
+
 /**
- * Test all enabled channels
+ * Conduit: 测试全部启用的服务商，服务端测完才返回，按结果提示
  */
 export async function handleTestAllChannels(
-  queryClient?: QueryClient,
-  onSuccess?: () => void
+  queryClient?: QueryClient
 ): Promise<void> {
   try {
     const response = await testAllChannels()
-    if (response.success) {
+    if (!response.success) {
+      handleServerError(response, i18next.t('Failed to test all channels'))
+      return
+    }
+    const results = response.data ?? []
+    const failed = results.filter((r) => r.error)
+    if (!results.length) {
+      toast.info(i18next.t('No enabled providers to test'))
+    } else if (!failed.length) {
       toast.success(
-        i18next.t(
-          'Testing all enabled channels started. Please refresh to see results.'
-        )
+        i18next.t('All {{count}} providers passed', { count: results.length })
       )
-      queryClient?.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
-      onSuccess?.()
     } else {
-      handleServerError(
-        response,
-        i18next.t('Failed to start testing all channels')
+      toast.error(
+        i18next.t('{{failed}} of {{count}} providers failed', {
+          failed: failed.length,
+          count: results.length,
+        }),
+        {
+          // 只留简短原因（如“服务商返回 401”），完整报错点卡片上的测试按钮看
+          description: failed
+            .map((r) => `${r.name}：${shortTestError(r.error ?? '')}`)
+            .join('；'),
+        }
       )
     }
+    queryClient?.invalidateQueries({ queryKey: channelsQueryKeys.lists() })
   } catch (error) {
     handleServerError(error, i18next.t('Failed to test all channels'))
   }
