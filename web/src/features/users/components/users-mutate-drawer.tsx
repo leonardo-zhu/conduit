@@ -227,7 +227,7 @@ export function UsersMutateDrawer({
                 name='display_name'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Display Name')}</FormLabel>
+                    <FormLabel>{t('Name')}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder='Vita' />
                     </FormControl>
