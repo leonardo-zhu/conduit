@@ -21,6 +21,7 @@ import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { StatusBadgeTypeContext } from '@/components/status-badge'
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 
 import { CHANNEL_STATUS } from '../constants'
 import type { Channel } from '../types'
@@ -47,6 +48,7 @@ function ChannelCardComponent({
 }) {
   const { t } = useTranslation()
   const { sensitiveVisible } = useChannels()
+  const { copyToClipboard } = useCopyToClipboard()
   const cells = row.getAllCells()
 
   const renderCell = (id: string) => {
@@ -89,7 +91,21 @@ function ChannelCardComponent({
               <div className={labelClass}>
                 #{sensitiveVisible ? row.original.id : SENSITIVE_MASK}
                 {row.original.slug && (
-                  <span className='font-mono'> · {row.original.slug}</span>
+                  <>
+                    {' · '}
+                    {/* 标识要写进应用配置（标识/模型名），点一下复制，也能手动选中 */}
+                    <button
+                      type='button'
+                      title={t('Click to copy')}
+                      className='hover:text-foreground cursor-copy font-mono select-text'
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void copyToClipboard(row.original.slug!)
+                      }}
+                    >
+                      {row.original.slug}
+                    </button>
+                  </>
                 )}
               </div>
               {nameCell}
