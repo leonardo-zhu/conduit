@@ -26,6 +26,7 @@ import {
 } from '@/lib/passkey'
 import { AuthOperationError } from '@/lib/secure-verification'
 import { STATUS_QUERY_KEY } from '@/lib/status-query'
+import { useAuthStore } from '@/stores/auth-store'
 
 import {
   beginPasskeyRegistration,
@@ -210,6 +211,7 @@ function AddPasskeyForm(props: { onCancel: () => void; onAdded: () => Promise<vo
   const { t } = useTranslation()
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const username = useAuthStore((state) => state.auth.user?.username ?? '')
   const [busy, setBusy] = useState(false)
   const operation = useRef<AbortController | null>(null)
   useEffect(() => () => operation.current?.abort(), [])
@@ -254,10 +256,24 @@ function AddPasskeyForm(props: { onCancel: () => void; onAdded: () => Promise<vo
 
   return (
     <form onSubmit={handleSubmit} className='space-y-3 rounded-md border p-3'>
+      {/* 密码管理器会把密码框前面的文本框当成用户名：放一个隐藏的用户名框，让它知道这是当前账号的密码，
+          “名称”框标成 off，免得弹出同一主域名下其他网站的账号 */}
+      <input
+        type='text'
+        name='username'
+        autoComplete='username'
+        value={username}
+        readOnly
+        hidden
+      />
       <div className='space-y-1.5'>
         <Label htmlFor='passkey-name'>{t('Name')}</Label>
         <Input
           id='passkey-name'
+          name='passkey-name'
+          autoComplete='off'
+          data-1p-ignore
+          data-lpignore='true'
           value={name}
           maxLength={50}
           placeholder={t('e.g. iCloud Keychain, YubiKey')}
@@ -270,6 +286,7 @@ function AddPasskeyForm(props: { onCancel: () => void; onAdded: () => Promise<vo
         <Label htmlFor='passkey-password'>{t('Current password')}</Label>
         <PasswordInput
           id='passkey-password'
+          name='password'
           value={password}
           autoComplete='current-password'
           onChange={(event) => setPassword(event.target.value)}
