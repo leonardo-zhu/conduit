@@ -16,10 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { KeyRound, LogOut } from 'lucide-react'
+import { Info, KeyRound, LogOut } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { AboutDialog } from '@/components/about-dialog'
 import { SignOutDialog } from '@/components/sign-out-dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -42,6 +43,7 @@ export function ProfileDropdown() {
   const { t } = useTranslation()
   const [open, setOpen] = useDialogState()
   const [passkeyOpen, setPasskeyOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const user = useAuthStore((state) => state.auth.user)
   const { displayName, roleLabel } = useUserDisplay(user)
   const avatarName = user?.username || displayName
@@ -103,6 +105,10 @@ export function ProfileDropdown() {
             <KeyRound className='size-4' />
             {t('Passkeys')}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAboutOpen(true)}>
+            <Info className='size-4' />
+            {t('About')}
+          </DropdownMenuItem>
 
           <DropdownMenuSeparator />
 
@@ -115,6 +121,7 @@ export function ProfileDropdown() {
 
       <SignOutDialog open={!!open} onOpenChange={setOpen} />
       <PasskeyDialog open={passkeyOpen} onOpenChange={setPasskeyOpen} />
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </>
   )
 }

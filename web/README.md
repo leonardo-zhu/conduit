@@ -4,7 +4,7 @@ Conduit 的管理后台，Next.js 16（App Router）。
 
 ## 来源与许可
 
-前端代码大部分取自 [NewAPI](https://github.com/QuantumNous/new-api) 的 `web/`（提交 `e449cc7`，2026-10-28），按 AGPL-3.0 使用，本目录随之以 AGPL-3.0-or-later 发布，见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。原文件保留版权头；按 NOTICE 的附加条款，界面侧边栏底部保留了署名和原项目链接，不要删。
+前端代码大部分取自 [NewAPI](https://github.com/QuantumNous/new-api) 的 `web/`（提交 `e449cc7`，2026-10-28），按 AGPL-3.0 使用，本目录随之以 AGPL-3.0-or-later 发布，见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。原文件保留版权头；按 NOTICE 的附加条款，界面上保留了署名和原项目链接（头像菜单 → 关于，`src/components/about-dialog.tsx`），不要删。
 
 相对原版的修改（AGPLv3 第 7(c) 条要求标明）：
 

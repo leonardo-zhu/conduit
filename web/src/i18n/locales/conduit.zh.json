@@ -141,5 +141,7 @@
   "No keys yet. Create one to call this app's aliases.": "还没有密钥。新建一个才能调用这个应用的别名。",
   "One key per device or deployment, so you can revoke one without touching the others": "建议每台设备或每个部署一个，吊销其中一个不影响其他",
   "Save the app first, then add keys to it": "先保存应用，再添加密钥",
-  "Shared by all keys of this app; 0 means unlimited": "这个应用的所有密钥共用，0 表示不限"
+  "Shared by all keys of this app; 0 means unlimited": "这个应用的所有密钥共用，0 表示不限",
+  "A self-hosted LLM gateway for personal apps": "给个人应用用的自建大模型网关",
+  "Licensed under AGPL-3.0-or-later. Source code:": "以 AGPL-3.0-or-later 许可发布。源码："
 }
