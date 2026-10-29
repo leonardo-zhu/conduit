@@ -1,6 +1,6 @@
 # 自建网关进度记录
 
-最后更新：2026-10-30（PR #4 已合并；控制台整理和密钥并入应用在分支 `feat/console-cleanup`，等合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-30（上线后的界面整理：PR #5、#6、#7 都已合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
 ## 当前状态（2026-10-30）
 
@@ -15,33 +15,45 @@
 
 - PR leonardo-zhu/conduit#4 已合并（2026-10-29）：上游不区分服务商，按协议配地址。OpenAI 兼容地址必填，Chat Completions 始终提供，Responses API 开关 + 原生 / 转换；Anthropic 兼容地址选填，`/v1/messages` 直接转发、永不和 OpenAI 格式互转。迁移 5、6。**还没用真实的 Anthropic 上游测过。**
 
-### 进行中：分支 `feat/console-cleanup`（等用户 review 合并）
+### 2026-10-30 上线后的界面整理（用户在本地和线上走查后逐条定的）
 
-用户 2026-10-30 在本地看界面后定的：
+**PR leonardo-zhu/conduit#5 已合并**（分支 `feat/console-cleanup`）：
 
-- **“上游”在界面上改称“服务商”**（英文 Providers），只改文案（翻译替换规则、管理接口报错、提醒、网关报错文字）；错误码、表名、代码标识符仍叫 upstream。
+- **“上游”在界面上改称“服务商”**（英文 Providers），只改文案；错误码、表名、代码标识符仍叫 upstream。
 - **侧栏按用途分组**：“使用情况”（概览、看板、日志）和“配置”（服务商、应用），不再分“常规 / 管理员”。
 - **API 密钥并入应用抽屉**，去掉独立页面。密钥只有名称、过期时间、IP 白名单（IP 白名单没讨论过，先保留）；**没有自己的额度和模型白名单**，能用应用的全部别名，额度只在应用上。迁移 7 清掉旧的令牌额度和白名单；额度提醒只针对应用。
-- **服务商标识 + 直接调用（方案 C）**：服务商加必填唯一的 `slug`（迁移 8，已有的按名称生成），请求可写 `标识/模型名`（如 `minimax/MiniMax-M2`）不配别名，模型名原样转发；别名照旧（不含 `/`）。`/v1/models` 加上启用服务商模型列表里的 `标识/模型名`。代价：任何密钥都能调任何启用的服务商（用户接受）。**部署后提醒用户把自动生成的标识改短（如 `ark`）。**
+- **服务商标识 + 直接调用（方案 C）**：服务商加必填唯一的 `slug`（界面叫“标识 / Provider ID”，迁移 8，已有的按名称生成），请求可写 `标识/模型名`（如 `minimax/MiniMax-M2`）不配别名，模型名原样转发、不要求在模型列表里；别名照旧（不含 `/`），**别名是选填的**。`/v1/models` 加上启用服务商模型列表里的 `标识/模型名`。代价：任何密钥都能调任何启用的服务商（用户接受）。
 - **NewAPI 署名挪进头像菜单 →“关于”**（加了本项目源码链接）。用户本想删，因为仓库公开、NOTICE 的 7(b) 附加条款要求界面上保留，最后选了“关于”弹窗；**不能只写在 README 里**。
 - 应用列表“可用余额”改成“用量 / 额度”带进度条（不限时显示“不限”）。
 - 语言默认跟随浏览器：检测结果不再写 localStorage，只存手动选择；语言菜单加“跟随系统”；`en-*` 归到 en、所有 `zh-*` 归到简体。
-- 上游卡片名称放到最上面。用户说开发模式的 Next.js “N” 圆钮无所谓，没动。
-- 验证：类型检查、`api-smoke`、`gateway-smoke` 通过，浏览器里试过密钥新建 / 删除、关于弹窗、服务商标识字段、跟随系统。
+
+**PR leonardo-zhu/conduit#6 已合并**（分支 `fix/app-empty-state`，只合进了前 3 个提交）：应用相关的“用户”残留文案改成“应用”（空状态、筛选、导出、手机端日志卡片）；别名文案改成选填；使用日志标题改“使用日志”、“令牌”改“密钥”、点应用名改为按该应用筛选（删掉 NewAPI 的用户信息弹窗）。
+
+**PR leonardo-zhu/conduit#7 已合并**（分支 `feat/key-expiry-presets`，10 个提交）：
+
+- #6 合并后才推的两个提交补在这里：服务商页去掉批量操作（标签动作没有后端）和“删除所有已禁用”（没有接口），“测试全部”改成按钮，新接口 `GET /api/channel/test` 并发测所有启用的服务商，失败的每行一个、只写简短原因。
+- 密钥过期按钮：1 小时 / 1 天 / 7 天 / 30 天 / 永不（新建默认仍是 90 天，没有对应按钮）。
+- 应用：抽屉里“名称”（原 Display Name）在上、应用标识在下，标识说明改为“日志、筛选、提醒里用它区分应用，创建后不能改，也是密钥名和别名的默认前缀”；列表先显示名称、标识用小号等宽字放第二行。
+- 别名的“服务商模型”改成下拉框（取自服务商的模型列表，保留已不在列表里的旧值；换服务商时自动换成第一个模型），去掉了浏览器 datalist 补全。**列表外的模型要先在服务商里加。**
+- 服务商卡片上的标识可选中、点击复制（悬停显示复制图标，复制后变对勾）。
+- **新 logo**：`web/public/logo.svg`（C 形通道 + 青绿圆点，侧栏和登录页）、`icon.svg`（圆角方块版，标签页）；`favicon.ico`、`apple-touch-icon.png`（铺满，不带圆角）、`logo.png` 由 SVG 用 `~/Library/Caches/ms-playwright` 里的 chrome-headless-shell 渲染，ico 用 Python 把 16/32/48 的 PNG 打包。`DEFAULT_LOGO` 改为 `/logo.svg`。
+
+讨论过但**决定不做**的：应用“默认模型”（`model` 是 OpenAI / Anthropic 的必填字段，SDK 都会带；远程切换模型靠别名，应用层要灰度可以自己远程下发别名，两层叠加）；开发模式的 Next.js “N” 圆钮（用户说无所谓）。
 
 ### 下次先做
 
-1. 用户合并 `feat/console-cleanup` 的 PR 后确认部署成功（CI 跑完、`docker compose ps`、登录页 200），提醒用户在后台把服务商标识改短。
-2. 用真实上游测：OpenAI 兼容地址下 Responses 原生 / 转换两种；Anthropic 兼容地址（如 MiniMax `https://api.minimaxi.com/anthropic`、方舟 Coding Plan `…/api/coding`）用 Claude Code 试一次（`ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。
-3. 用户在线上测试、切 Vita，按用户指出的具体问题修 bug，**不要逐页巡检**。
+1. 确认 #7 部署成功（CI 跑完、`docker compose ps`、登录页 200、新 logo 和标签图标）。提醒用户在后台把迁移 8 自动生成的服务商标识改短（如 `ark-agent-plan` → `ark`），趁还没有应用用 `标识/模型名`。
+2. 用真实上游测：OpenAI 兼容地址下 Responses 原生 / 转换两种、流式（`"stream": true`）；`标识/模型名` 直接调用；Anthropic 兼容地址（如 MiniMax `https://api.minimaxi.com/anthropic`、方舟 Coding Plan `…/api/coding`）用 Claude Code 试一次（`ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。
+3. 用户在线上测试、切 Vita（代码里写别名，如 `vita-chat`），按用户指出的具体问题修 bug，**不要逐页巡检**。
 4. 对照上游控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
 
 ### 其他待处理
 
+- **用户在对话里贴过一个线上密钥**（`sk-0LE5…zT0Y`，2026-10-30 测 curl 时），已提醒；不是临时测试用的话应在应用抽屉里重新生成。
 - **agent-skills 的 Deploy Skills 工作流一直失败**：部署目标是已经撤掉的 do-sg（`DEPLOY_SSH_HOST` 解析不了）。合并 skill 的 PR 后要在本机手动 `TARGET_HOME=$HOME ~/Agent/Skills/install.sh`；R4S 上 OpenClaw 的 skill 目前没人更新。要不要把工作流改成部署到 R4S，等用户定。
 - 本机 `web/.env.local` 里复制了一份 OpenClaw 默认机器人的令牌做测试（用户同意的），推送目标是 Daily Briefing 频道。
 - `git stash` 里留着一条已被 PR #4 取代的提示文字修改（`stash@{0}`），可以删。
-- 可能要做（用户没要求）：应用“手动清零已用量”按钮；按月重置的时间按服务器时区（容器多半是 UTC），要不要固定成北京时间。
+- 可能要做（用户没要求，提过）：应用“手动清零已用量”按钮；按月重置的时间按服务器时区（容器多半是 UTC），要不要固定成北京时间；新建密钥默认过期改 30 天；使用日志、看板、提醒里显示应用名称而不是标识（日志存的是标识，要查表转换）；日志不会自动清理。
 
 ## 已完成
 
@@ -167,6 +179,8 @@ node scripts/seed-dev.mjs    # 另开终端，写入示例数据
 
 ## 踩过的坑
 
+- **往已有 PR 追加提交前先查它是否已合并**：用户可能边走查边合并，合并后再推到原分支的提交不会进 master（#6 就漏了两个提交，后来补进 #7）。推之前用 API 查 PR 的 `state`，已合并就从最新 master 开新分支。
+- 用 Python 改 `conduit.*.json` 时用 `json.dump(..., ensure_ascii=False, indent=2)` 加结尾换行，保持原格式，diff 才干净。
 - **改 `next.config.ts` 或 `.env.local` 后要重启 dev 服务**，否则浏览器可能陷入不停刷新的循环。
 - **env 文件里的值不能含 `$`**：Next.js 和 docker compose 都会把 `$xxx` 当变量展开（密码哈希因此改用 `:` 分隔）。
 - **TypeScript 是 7.0（Go 原生版），没有 JS API**，需要分析代码的工具只能解析 `tsc` 的输出。
