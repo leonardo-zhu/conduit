@@ -33,7 +33,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import type { AdminUserManageAction } from '@/features/auth/secure-verification'
 import { handleServerError } from '@/lib/handle-server-error'
 import { AuthOperationError } from '@/lib/secure-verification'
 
@@ -67,7 +66,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     setOpen('delete')
   }
 
-  const handleManage = async (action: AdminUserManageAction) => {
+  const handleManage = async (action: 'enable' | 'disable') => {
     // Conduit: 应用的启用 / 禁用不需要 NewAPI 的二次身份验证
     try {
       const result = await manageUser(user.id, action)

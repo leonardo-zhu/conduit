@@ -19,10 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 import { authRequestOptions, authResult } from '@/lib/secure-verification'
 
-import type {
-  SecurityProof,
-  VerificationOperation,
-} from '../secure-verification/types'
 import type { ApiResponse, PasskeyItem, PasskeyOptionsPayload } from './types'
 
 // Conduit: 管理员可以注册多个 Passkey。注册前要求再输一次密码（原版用 X-Security-Proof），
@@ -92,36 +88,4 @@ export async function finishPasskeyLogin(
     { skipAuthRefresh: true, signal }
   )
   return res.data
-}
-
-export function beginPasskeyVerification(
-  operation: VerificationOperation,
-  signal?: AbortSignal,
-  rpID?: string
-): Promise<PasskeyOptionsPayload> {
-  return authResult(
-    api.post(
-      '/api/user/passkey/verify/begin',
-      {
-        scope: operation.scope,
-        ...(rpID ? { rp_id: rpID } : {}),
-        ...(operation.context ? { context: operation.context } : {}),
-      },
-      { ...authRequestOptions, signal }
-    )
-  )
-}
-
-export function finishPasskeyVerification(
-  flowToken: string,
-  payload: Record<string, unknown>,
-  signal?: AbortSignal
-): Promise<SecurityProof> {
-  return authResult(
-    api.post(
-      '/api/user/passkey/verify/finish',
-      { flow_token: flowToken, credential: payload },
-      { ...authRequestOptions, singleUseAuthorization: true, signal }
-    )
-  )
 }
