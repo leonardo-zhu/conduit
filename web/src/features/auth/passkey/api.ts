@@ -23,60 +23,48 @@ import type {
   SecurityProof,
   VerificationOperation,
 } from '../secure-verification/types'
-import type { ApiResponse, PasskeyOptionsPayload, PasskeyStatus } from './types'
+import type { ApiResponse, PasskeyItem, PasskeyOptionsPayload } from './types'
 
-function proofHeaders(proofToken?: string): Record<string, string> | undefined {
-  return proofToken ? { 'X-Security-Proof': proofToken } : undefined
-}
-
-export async function getPasskeyStatus(): Promise<ApiResponse<PasskeyStatus>> {
-  const res = await api.get<ApiResponse<PasskeyStatus>>('/api/user/passkey')
-  return res.data
+// Conduit: 管理员可以注册多个 Passkey。注册前要求再输一次密码（原版用 X-Security-Proof），
+// 删除按凭据 ID；列表、注册、删除都不轮换登录态
+export async function listPasskeys(): Promise<PasskeyItem[]> {
+  return authResult(api.get('/api/user/passkey', authRequestOptions))
 }
 
 export function beginPasskeyRegistration(
-  proofToken: string,
+  password: string,
   signal?: AbortSignal
 ): Promise<PasskeyOptionsPayload> {
   return authResult(
-    api.post('/api/user/passkey/register/begin', undefined, {
-      ...authRequestOptions,
-      headers: proofHeaders(proofToken),
-      signal,
-    })
+    api.post(
+      '/api/user/passkey/register/begin',
+      { password },
+      { ...authRequestOptions, signal }
+    )
   )
 }
 
 export function finishPasskeyRegistration(
   flowToken: string,
   payload: Record<string, unknown>,
+  name: string,
   signal?: AbortSignal
-): Promise<unknown> {
+): Promise<PasskeyItem> {
   return authResult(
     api.post(
       '/api/user/passkey/register/finish',
-      { flow_token: flowToken, credential: payload },
-      {
-        ...authRequestOptions,
-        acceptAuthRotation: true,
-        singleUseAuthorization: true,
-        signal,
-      }
+      { flow_token: flowToken, credential: payload, name },
+      { ...authRequestOptions, signal }
     )
   )
 }
 
-export function deletePasskey(
-  proofToken: string,
-  signal?: AbortSignal
-): Promise<unknown> {
+export function deletePasskey(id: string): Promise<unknown> {
   return authResult(
-    api.delete('/api/user/passkey', {
-      ...authRequestOptions,
-      headers: proofHeaders(proofToken),
-      acceptAuthRotation: true,
-      signal,
-    })
+    api.delete(
+      `/api/user/passkey/${encodeURIComponent(id)}`,
+      authRequestOptions
+    )
   )
 }
 
