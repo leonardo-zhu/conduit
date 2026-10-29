@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
@@ -75,11 +74,6 @@ type AppHeaderProps = {
    */
   rightContent?: React.ReactNode
   /**
-   * Whether to show config drawer
-   * @default true
-   */
-  showConfigDrawer?: boolean
-  /**
    * Whether to show profile dropdown
    * @default true
    */
@@ -88,12 +82,11 @@ type AppHeaderProps = {
 
 export function AppHeader({
   navLinks = defaultTopNavLinks,
-  // Conduit: 顶部的“主页”“控制台”都进后台首页，默认不显示；通知（系统公告）去掉了
+  // Conduit: 顶部的“主页”“控制台”都进后台首页，默认不显示；通知（系统公告）和主题设置去掉了，主题跟随系统
   showTopNav = false,
   leftContent,
   showSearch = true,
   rightContent,
-  showConfigDrawer = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
   // Prioritize dynamically generated links from backend
@@ -121,7 +114,6 @@ export function AppHeader({
             <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
           )}
           <LanguageSwitcher />
-          {showConfigDrawer && <ConfigDrawer />}
           {showProfileDropdown && <ProfileDropdown />}
         </div>
       )}
