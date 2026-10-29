@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Languages, Check } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
@@ -25,32 +25,45 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   INTERFACE_LANGUAGE_OPTIONS,
+  LANGUAGE_STORAGE_KEY,
   normalizeInterfaceLanguage,
 } from '@/i18n/languages'
-import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth-store'
 
+function readStoredLanguage(): string | null {
+  try {
+    return localStorage.getItem(LANGUAGE_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Conduit: 默认跟随浏览器 / 系统语言。手动选了某个语言才存进 localStorage，
+ * 选“跟随系统”清掉记录、重新检测。不再存到服务端（Conduit 没有这个接口）
+ */
 export function LanguageSwitcher() {
   const { i18n, t } = useTranslation()
-  const user = useAuthStore((s) => s.auth.user)
+  const [stored, setStored] = useState(readStoredLanguage)
   const currentLanguage = normalizeInterfaceLanguage(i18n.language)
   const handleChangeLanguage = useCallback(
-    async (code: string) => {
-      await i18n.changeLanguage(code)
-      if (user) {
-        try {
-          await api.put('/api/user/self', { language: code })
-        } catch {
-          // Best-effort persistence; don't block the UI on failure
-        }
+    async (code: string | null) => {
+      try {
+        if (code) localStorage.setItem(LANGUAGE_STORAGE_KEY, code)
+        else localStorage.removeItem(LANGUAGE_STORAGE_KEY)
+      } catch {
+        // 存不了就只对这次生效
       }
+      setStored(code)
+      // 不传语言时 i18next 重新走检测（此时只剩浏览器语言）
+      await i18n.changeLanguage(code ?? undefined)
     },
-    [i18n, user]
+    [i18n]
   )
 
   return (
@@ -62,6 +75,11 @@ export function LanguageSwitcher() {
         <span className='sr-only'>{t('Change language')}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>
+        <DropdownMenuItem onClick={() => handleChangeLanguage(null)}>
+          {t('Follow system')}
+          <Check size={14} className={cn('ms-auto', stored && 'hidden')} />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {INTERFACE_LANGUAGE_OPTIONS.map((lang) => (
           <DropdownMenuItem
             key={lang.code}
@@ -72,7 +90,7 @@ export function LanguageSwitcher() {
               size={14}
               className={cn(
                 'ms-auto',
-                currentLanguage !== lang.code && 'hidden'
+                (!stored || currentLanguage !== lang.code) && 'hidden'
               )}
             />
           </DropdownMenuItem>
