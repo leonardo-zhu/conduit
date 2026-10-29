@@ -156,7 +156,9 @@ function readUpstreamInput(body: unknown, partial: boolean) {
   }
   if (has('test_model')) fields.test_model = typeof input.test_model === 'string' ? input.test_model.trim() : ''
   if (has('status')) {
-    fields.status = Number(input.status) === UPSTREAM_STATUS.ENABLED ? UPSTREAM_STATUS.ENABLED : UPSTREAM_STATUS.DISABLED
+    // 新建时没传状态默认启用
+    const status = input.status === undefined ? UPSTREAM_STATUS.ENABLED : Number(input.status)
+    fields.status = status === UPSTREAM_STATUS.ENABLED ? UPSTREAM_STATUS.ENABLED : UPSTREAM_STATUS.DISABLED
   }
   if (has('remark')) fields.remark = typeof input.remark === 'string' ? input.remark.slice(0, 255) : ''
   return { fields }
