@@ -150,8 +150,11 @@ export function ApiKeysMutateDrawer({
   // Load existing data when updating
   useEffect(() => {
     if (!open) {
-      form.reset(getApiKeyFormDefaultValues())
-      setInitializedTarget(null)
+      // 关闭后只重置一次：form.watch 让组件跟着表单重渲染，每次都 reset 会无限循环
+      if (initializedTarget !== null) {
+        form.reset(getApiKeyFormDefaultValues())
+        setInitializedTarget(null)
+      }
       return
     }
     if (!appsFetched) return
