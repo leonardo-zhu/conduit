@@ -7,9 +7,9 @@
 - **2026-10-29 已上线**：PR leonardo-zhu/conduit#2 合并到 master 后由 CI 部署。R4S 上跑的是 `conduit-web`（127.0.0.1:3012，内存约 44MB / 上限 256MB），`conduit-new-api` 和 `conduit-adapter` 已删除；Caddy 的 `conduit.r4s…` 改为直接指向 3012（服务器上备份 `Caddyfile.bak-2026-10-29`，`~/HomeLab/r4s/backups/` 里有改前改后两份）。外网登录页 200、`/v1/models` 无令牌 401。新库是空的，用户登录后自己配上游、应用、别名、令牌再测试。
 - 服务器 `/opt/stacks/conduit/.env`：`ADMIN_USERNAME=admin`、`ADMIN_PASSWORD_HASH`（用户本机生成后经 ssh 直接追加）、`CONDUIT_MASTER_KEY`（在服务器上 openssl 生成，丢了要重填所有上游密钥）、`PASSKEY_ORIGIN`、`CONDUIT_TELEGRAM_CHAT_ID`；`SESSION_SECRET`、`CRYPTO_SECRET` 是 NewAPI 留下的，后者确认不回退后可删。改前备份 `.env.bak-2026-10-29-prelaunch`。旧数据还在 `/opt/conduit/new-api/`。
 - 提交历史在上线后重写过（2026-10-29，用户确认后由用户本人强推）：bot 作者的 70 个提交都加了 `Co-authored-by: Leonardo Zhu <leonardo-zhu@qq.com>`，让它们计入用户的 GitHub contribution；代码、作者和日期不变，所有 SHA 都变了（本文件里的 SHA 已换成新的）。git-identity skill 也已要求以后每个提交都带这一行。
-- 最近一轮修 bug 的提交（`d3c89d6`..`801ca7b`）：令牌抽屉死循环、删除二次验证残留、复制上游去掉重置余额、错误页去掉 NewAPI 反馈按钮、概览余额改为各应用汇总、看板“分流”去掉节点和分组层并把“用户”改称“应用”、日志显示“估算”且中途断开的请求算作消耗、应用页“最后登录”改“最近请求”、顶栏去掉通知和“主页”“控制台”、去掉主题设置面板（跟随系统深浅色）。
-- 顶栏铃铛已恢复，改为**网关事件提醒**（`fa31e79`..`c2f8949`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
-- 被删的界面功能用户确认都不恢复（2026-10-29）：顶栏“主页”“控制台”、错误页反馈按钮、分流图的节点和分组层、复制上游的“重置余额”、“最后登录”、搜索面板的深浅色切换、主题偏好。顶部导航和没用到的公开页布局代码已删（`0805a35`）。语言切换保留。
+- 最近一轮修 bug 的提交（`dc03dad`..`407e719`）：令牌抽屉死循环、删除二次验证残留、复制上游去掉重置余额、错误页去掉 NewAPI 反馈按钮、概览余额改为各应用汇总、看板“分流”去掉节点和分组层并把“用户”改称“应用”、日志显示“估算”且中途断开的请求算作消耗、应用页“最后登录”改“最近请求”、顶栏去掉通知和“主页”“控制台”、去掉主题设置面板（跟随系统深浅色）。
+- 顶栏铃铛已恢复，改为**网关事件提醒**（`3b4fab7`..`c2bcd5e`）：上游 401/403、429、连续失败，应用 / 令牌额度越过 80% / 100%，错误率突增；新事件可推送 Telegram（`CONDUIT_TELEGRAM_*`）。设计和流程见 [alerts.md](alerts.md)。本地用故意写错的上游验证过四类事件、铃铛列表、点击跳转和已读；“额度将尽 80%”要真实扣费才会触发，没有实测。Telegram 推送复用 OpenClaw 默认机器人：生产由 `compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，本地 `web/.env.local` 里复制了一份令牌做测试，2026-10-29 本地触发事件，用户确认私聊收到；之后改发到 Daily Briefing 频道（`-1003750120699`），R4S 的 Conduit `.env` 已加 `CONDUIT_TELEGRAM_CHAT_ID`（备份 `.env.bak-2026-10-29`）。
+- 被删的界面功能用户确认都不恢复（2026-10-29）：顶栏“主页”“控制台”、错误页反馈按钮、分流图的节点和分组层、复制上游的“重置余额”、“最后登录”、搜索面板的深浅色切换、主题偏好。顶部导航和没用到的公开页布局代码已删（`658c01e`）。语言切换保留。
 
 ### 下次先做
 
