@@ -1,12 +1,15 @@
 # Conduit — R4S 上的 /opt/stacks/conduit/compose.yaml
 # 由 GitHub Actions 部署时从仓库拷过去，不要在服务器上直接改（改了会被下次部署覆盖）。
 #
-# 两个服务：
+# 三个服务：
 #   new-api  官方镜像，不改源码。负责令牌、额度、渠道、模型重定向、日志、管理后台。
 #   adapter  本仓库 adapter/ 目录，CI 构建后推到 GHCR。Responses ↔ Chat 转换，作为 NewAPI 的一个渠道。
+#   web      本仓库 web/ 目录：自建的管理后台 + 网关，用来替换上面两个（见 docs/rewrite-plan.md）。
+#            放在 profile "web" 里：服务器的 .env 加上 COMPOSE_PROFILES=web 才会启动，
+#            并行验证期间和 NewAPI 同时运行，切换完成后删掉 new-api 和 adapter。
 #
 # 和 R4S 其他 stack 一致：network_mode: host + restart: unless-stopped。
-# 端口：3000（gh-mcp）、4000（个人站）已被占用，这里用 3010 / 3011。
+# 端口：3000（gh-mcp）、4000（个人站）已被占用，这里用 3010 / 3011 / 3012。
 
 services:
   new-api:
@@ -62,5 +65,30 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
+    labels:
+      - "app=conduit"
+
+  web:
+    image: ghcr.io/leonardo-zhu/conduit-web:${WEB_TAG:-latest}
+    container_name: conduit-web
+    profiles: ["web"]
+    restart: unless-stopped
+    network_mode: host
+    # 管理员账号、会话密钥、主密钥、PASSKEY_ORIGIN，见 web/.env.example。只在服务器上维护
+    env_file:
+      - path: web.env
+        required: true
+    environment:
+      - PORT=3012
+      # 只给同机的 Caddy 访问：IP 白名单和登录限速信任 X-Forwarded-For，不能让外部直连
+      - HOSTNAME=127.0.0.1
+      - TZ=Asia/Shanghai
+      - CONDUIT_DATA_DIR=/data
+      - NODE_OPTIONS=--max-old-space-size=128
+    volumes:
+      # 容器里以 node 用户（uid 1000）运行，首次部署前 chown 1000:1000 这个目录
+      - ${CONDUIT_DATA_DIR:-/opt/conduit}/web/data:/data
+    # 2026-10-29 本机容器实测：空闲约 57MB，300 个流式请求压测后稳定在约 93MB
+    mem_limit: 256m
     labels:
       - "app=conduit"
