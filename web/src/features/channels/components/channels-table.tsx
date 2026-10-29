@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getRouteApi } from '@/lib/router'
 import type { ColumnFiltersState, OnChangeFn, SortingState } from '@tanstack/react-table'
 import { Eye, EyeOff, RefreshCw } from 'lucide-react'
-import { useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -54,7 +54,6 @@ import type { Channel, ChannelSortBy } from '../types'
 import { ChannelCard } from './channel-card'
 import { useChannelsColumns } from './channels-columns'
 import { useChannels } from './channels-provider'
-import { DataTableBulkActions } from './data-table-bulk-actions'
 
 const route = getRouteApi('/_authenticated/channels/')
 const CHANNELS_COLUMN_VISIBILITY_STORAGE_KEY = 'channels:column-visibility'
@@ -76,7 +75,7 @@ function isDisabledChannelRow(channel: Channel) {
 
 export function ChannelsTable() {
   const { t } = useTranslation()
-  const { sorting, setSorting, batchMode, sensitiveVisible, setSensitiveVisible } =
+  const { sorting, setSorting, sensitiveVisible, setSensitiveVisible } =
     useChannels()
   const isMobile = useMediaQuery('(max-width: 640px)')
 
@@ -230,7 +229,7 @@ export function ChannelsTable() {
     storageKey: CHANNELS_VIEW_MODE_STORAGE_KEY,
     defaultMode: 'card',
   })
-  const columns = useChannelsColumns({ enableSelection: batchMode })
+  const columns = useChannelsColumns({ enableSelection: false })
 
   // React Table instance
   const { table } = useDataTable({
@@ -248,7 +247,7 @@ export function ChannelsTable() {
     columnFilters,
     pagination,
     globalFilter,
-    enableRowSelection: batchMode,
+    enableRowSelection: false,
     onSortingChange: handleSortingChange,
     onColumnFiltersChange: handleColumnFiltersChange,
     onPaginationChange,
@@ -260,12 +259,6 @@ export function ChannelsTable() {
     enableColumnResizing: !isMobile,
     ensurePageInRange,
   })
-
-  useEffect(() => {
-    if (!batchMode) {
-      table.resetRowSelection()
-    }
-  }, [batchMode, table])
 
   return (
     <div role='region' aria-label={t('Channels')} className='relative h-full min-h-0'>
@@ -368,9 +361,6 @@ export function ChannelsTable() {
             }
             return DISABLED_ROW_DESKTOP
           }}
-          bulkActions={
-            batchMode ? <DataTableBulkActions table={table} /> : null
-          }
         />
     </div>
   )

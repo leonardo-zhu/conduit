@@ -157,5 +157,8 @@
   "Optional. An alias is the app's own model name pointing to a provider model; repointing it takes effect immediately without changing the app.": "选填。别名是应用自己的模型名，指向某个服务商的某个模型；改了指向立即生效，应用不用改。",
   "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.": "没有别名。这个应用的密钥也可以直接用“服务商标识/模型名”调用，如 minimax/MiniMax-M2。",
   "Show only this app": "只看这个应用",
-  "Key name": "密钥名称"
+  "Key name": "密钥名称",
+  "No enabled providers to test": "没有启用的服务商可以测试",
+  "All {{count}} providers passed": "{{count}} 个服务商都测试通过",
+  "{{failed}} of {{count}} providers failed": "{{count}} 个服务商中 {{failed}} 个测试失败"
 }
