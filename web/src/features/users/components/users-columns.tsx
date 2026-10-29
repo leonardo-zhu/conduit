@@ -95,8 +95,9 @@ export function useUsersColumns(): ColumnDef<User>[] {
           return (
             <div className='flex min-w-[160px] flex-col gap-1'>
               <div className='flex items-center gap-2'>
+                {/* Conduit: 显示名在上，应用标识在下 */}
                 <LongText className='max-w-[140px] text-sm font-normal'>
-                  {username}
+                  {displayName || username}
                 </LongText>
                 {remark && (
                   <Tooltip>
@@ -120,9 +121,9 @@ export function useUsersColumns(): ColumnDef<User>[] {
               {displayName && displayName !== username && (
                 <div
                   data-table-text='secondary'
-                  className='text-muted-foreground max-w-[180px] text-xs font-normal'
+                  className='text-muted-foreground max-w-[180px] font-mono text-xs font-normal'
                 >
-                  <LongText>{displayName}</LongText>
+                  <LongText>{username}</LongText>
                 </div>
               )}
             </div>
