@@ -104,5 +104,7 @@
   "User Analytics": "应用统计",
   "Top Users": "热门应用",
   "User Consumption Ranking": "应用消耗排行",
-  "User Consumption Trend": "应用消耗趋势"
+  "User Consumption Trend": "应用消耗趋势",
+  "Estimated": "估算",
+  "The upstream returned no usage; tokens are estimated from text length": "上游没有返回用量，按文本长度估算"
 }

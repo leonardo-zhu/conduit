@@ -515,6 +515,14 @@ export function useCommonLogsColumns(
               <span className='font-mono text-xs font-medium tabular-nums'>
                 {promptTokens.toLocaleString()} /{' '}
                 {completionTokens.toLocaleString()}
+                {other?.estimated && (
+                  <span
+                    className='text-warning ml-1 font-sans text-[11px] font-normal'
+                    title={t('The upstream returned no usage; tokens are estimated from text length')}
+                  >
+                    {t('Estimated')}
+                  </span>
+                )}
               </span>
               {(cacheReadTokens > 0 || cacheWriteTokens > 0) && (
                 <div className='flex items-center gap-1 text-[11px]'>

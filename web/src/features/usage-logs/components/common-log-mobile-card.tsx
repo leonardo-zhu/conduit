@@ -302,6 +302,9 @@ export function CommonLogMobileCard<TData>(props: {
               {log.completion_tokens.toLocaleString()}
             </span>
           </span>
+          {other?.estimated && (
+            <span className='text-warning'>{t('Estimated')}</span>
+          )}
           {cacheRead > 0 && (
             <span>
               {t('Cache')} ↓ {cacheRead.toLocaleString()}
