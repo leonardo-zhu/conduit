@@ -20,7 +20,7 @@ import i18n from 'i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 import { initReactI18next } from 'react-i18next'
 
-import { convertDetectedLanguage } from './languages'
+import { convertDetectedLanguage, LANGUAGE_STORAGE_KEY } from './languages'
 import conduitEn from './locales/conduit.en.json'
 import conduitZh from './locales/conduit.zh.json'
 import en from './locales/en.json'
@@ -65,9 +65,12 @@ i18n
     interpolation: {
       escapeValue: false, // not needed for react as it escapes by default
     },
+    // Conduit: 默认跟随浏览器 / 系统语言，检测结果不写回 localStorage；
+    // 只有在语言切换器里手动选了才存（见 language-switcher.tsx），选“跟随系统”会清掉
     detection: {
       order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
+      lookupLocalStorage: LANGUAGE_STORAGE_KEY,
+      caches: [],
       // Browsers report `zh-CN`/`zh-TW`/`zh`; map them onto our `zhCN`/`zhTW`
       // codes (non-Chinese codes pass through for normal supportedLngs matching).
       convertDetectedLanguage,

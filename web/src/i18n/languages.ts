@@ -21,6 +21,9 @@ export const INTERFACE_LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
 ] as const
 
+/** 手动选的界面语言存在这里；没有就跟随浏览器 / 系统 */
+export const LANGUAGE_STORAGE_KEY = 'i18nextLng'
+
 export type InterfaceLanguageCode =
   (typeof INTERFACE_LANGUAGE_OPTIONS)[number]['code']
 
@@ -57,17 +60,11 @@ export function normalizeInterfaceLanguage(value?: string | null): string {
  */
 export function convertDetectedLanguage(value: string): string {
   const lower = value.trim().replaceAll('_', '-').toLowerCase()
-  if (!lower.startsWith('zh')) return value
-  if (
-    lower === 'zhtw' ||
-    lower === 'zh-tw' ||
-    lower === 'zh-hk' ||
-    lower === 'zh-mo' ||
-    lower.startsWith('zh-hant')
-  ) {
-    return 'zhTW'
-  }
-  return 'zhCN'
+  // Conduit 只有简体中文和英文：繁体也用简体；en-GB、en-US 这类要归到 en，
+  // 否则不在 supportedLngs 里会被跳过，落到浏览器的第二语言
+  if (lower.startsWith('zh')) return 'zhCN'
+  if (lower === 'en' || lower.startsWith('en-')) return 'en'
+  return value
 }
 
 /**
