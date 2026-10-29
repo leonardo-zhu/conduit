@@ -24,11 +24,6 @@ For commercial licensing, please contact support@quantumnous.com
 export { AppHeader } from './components/app-header'
 export { AppSidebar } from './components/app-sidebar'
 export { AuthenticatedLayout } from './components/authenticated-layout'
-export { PublicLayout } from './components/public-layout'
-export { PublicHeader } from './components/public-header'
-export { PublicNavigation } from './components/public-navigation'
-export { HeaderLogo } from './components/header-logo'
-export { NavLinkItem, NavLinkList } from './components/nav-link-item'
 export { Header } from './components/header'
 export { Main } from './components/main'
 export { PageFooterPortal } from './components/page-footer'
@@ -36,14 +31,6 @@ export { NavGroup } from './components/nav-group'
 export { SectionPageLayout } from './components/section-page-layout'
 export { SidebarViewHeader } from './components/sidebar-view-header'
 export { SystemBrand } from './components/system-brand'
-export { TopNav } from './components/top-nav'
-export { MobileDrawer } from './components/mobile-drawer'
-
-// Configuration
-export { defaultTopNavLinks } from './config/top-nav.config'
-
-// Constants
-export { MOBILE_DRAWER_ANIMATION, MOBILE_DRAWER_CONFIG } from './constants'
 
 // Sidebar view registry
 export { resolveSidebarView } from './lib/sidebar-view-registry'
@@ -58,6 +45,5 @@ export type {
   SidebarData,
   SidebarView,
   SidebarViewParent,
-  TopNavLink,
 } from './types'
 export type { SectionPageLayoutProps } from './components/section-page-layout'

@@ -88,18 +88,6 @@ export type SidebarData = {
 }
 
 /**
- * Top navigation link type
- */
-export type TopNavLink = {
-  title: string
-  href: string
-  isActive?: boolean
-  disabled?: boolean
-  requiresAuth?: boolean
-  external?: boolean
-}
-
-/**
  * Back-navigation descriptor for a nested sidebar view
  */
 export type SidebarViewParent = {

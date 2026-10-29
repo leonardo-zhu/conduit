@@ -21,29 +21,21 @@ import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { useNotifications } from '@/hooks/use-notifications'
-import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
-import { defaultTopNavLinks } from '../config/top-nav.config'
-import type { TopNavLink } from '../types'
 import { Header } from './header'
 import { SystemBrand } from './system-brand'
-import { TopNav } from './top-nav'
 
 /**
  * General application Header component
- * Integrates navigation bar, search, configuration and profile functions
+ * Integrates search, gateway alerts, language and profile functions
  *
  * @example
  * // Basic usage
  * <AppHeader />
  *
  * @example
- * // Custom navigation links
- * <AppHeader navLinks={customLinks} />
- *
- * @example
- * // Hide navigation bar and search box
- * <AppHeader showTopNav={false} showSearch={false} />
+ * // Hide search box
+ * <AppHeader showSearch={false} />
  *
  * @example
  * // Fully customize left and right content
@@ -54,16 +46,7 @@ import { TopNav } from './top-nav'
  */
 type AppHeaderProps = {
   /**
-   * Custom navigation links, uses default global navigation or dynamically generated from backend if not provided
-   */
-  navLinks?: TopNavLink[]
-  /**
-   * Whether to show top navigation bar
-   * @default true
-   */
-  showTopNav?: boolean
-  /**
-   * Left content, overrides TopNav if provided
+   * Left content, shown after the brand
    */
   leftContent?: React.ReactNode
   /**
@@ -88,19 +71,14 @@ type AppHeaderProps = {
 }
 
 export function AppHeader({
-  navLinks = defaultTopNavLinks,
-  // Conduit: 顶部的“主页”“控制台”都进后台首页，默认不显示；主题设置去掉了，主题跟随系统；
+  // Conduit: 纯管理后台，去掉了顶部的“主页”“控制台”导航（都进后台首页）和主题设置（跟随系统）；
   // 铃铛改为网关事件（上游异常、额度告急、错误率突增）
-  showTopNav = false,
   leftContent,
   showSearch = true,
   rightContent,
   showNotifications = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
-  // Prioritize dynamically generated links from backend
-  const dynamicLinks = useTopNavLinks()
-  const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
   const notifications = useNotifications()
 
   return (
@@ -115,11 +93,6 @@ export function AppHeader({
 
       {rightContent ?? (
         <div className='ms-auto flex shrink-0 items-center gap-1 sm:gap-2'>
-          {showTopNav && (
-            <div className='me-1 hidden lg:block'>
-              <TopNav links={links} />
-            </div>
-          )}
           {showSearch && (
             <Search className='w-8 flex-none [&>span]:hidden sm:[&>span]:inline' />
           )}
