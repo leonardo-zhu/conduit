@@ -163,5 +163,7 @@
   "7 days": "7 天",
   "1 hour": "1 小时",
   "1 day": "1 天",
-  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "唯一标识，使用日志、筛选和提醒里用它区分应用，创建后不能改。也是密钥名和别名的默认前缀"
+  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "唯一标识，使用日志、筛选和提醒里用它区分应用，创建后不能改。也是密钥名和别名的默认前缀",
+  "Select a model": "选择模型",
+  "This provider has no models yet": "这个服务商还没填模型列表"
 }
