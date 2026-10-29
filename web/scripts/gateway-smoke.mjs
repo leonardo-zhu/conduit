@@ -102,8 +102,7 @@ await admin('PUT', `/api/app/${app.id}/aliases`, {
     alias('smoke-gw-chatonly', chatOnlyUp, 'normal'),
   ],
 })
-const allModels = 'smoke-gw-chat,smoke-gw-native,smoke-gw-tool,smoke-gw-nousage,smoke-gw-slow,smoke-gw-error,smoke-gw-off,smoke-gw-chatonly'
-const token = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-main', unlimited_quota: true, expired_time: -1, model_limits: allModels })
+const token = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-main', expired_time: -1 })
 const key = token.key
 
 // ---------------------------------------------------------------------------
@@ -118,15 +117,11 @@ check('令牌不对 401', res.status === 401, res.status)
 
 res = await gw('/v1/models', key)
 json = await res.json()
-check(
-  '模型列表只含白名单里的别名',
-  json.data?.length === 8 && json.data.some((m) => m.id === 'smoke-gw-chat') && !json.data.some((m) => m.id === 'smoke-gw-hidden'),
-  json
-)
+check('模型列表是应用的全部别名', json.data?.length === 9 && json.data.some((m) => m.id === 'smoke-gw-hidden'), json)
 
-res = await gw('/v1/responses', key, { model: 'smoke-gw-hidden', input: 'hi' })
+res = await gw('/v1/responses', key, { model: 'smoke-gw-missing', input: 'hi' })
 json = await res.json()
-check('白名单外的别名 400 model_not_found', res.status === 400 && json.error?.code === 'model_not_found', json)
+check('应用里没有的别名 400 model_not_found', res.status === 400 && json.error?.code === 'model_not_found', json)
 
 res = await gw('/v1/responses', key, { model: 'smoke-gw-off', input: 'hi' })
 check('上游停用 503', res.status === 503, res.status)
@@ -302,25 +297,22 @@ const results = await Promise.all(
 check(`${N} 个并发请求都成功`, results.every((s) => s === 200), results)
 check(`令牌已用量正好增加 ${N} × 15`, tokenUsed(token.id) - before === N * 15, tokenUsed(token.id) - before)
 
-const small = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-small', remain_quota: 20, expired_time: -1, model_limits: 'smoke-gw-chat' })
+// 应用额度 = 已用 + 20：每次 15，前两次放行（不预占），第三次 429
+const usedNow = db.prepare('SELECT used FROM apps WHERE id = ?').get(app.id).used
+await admin('PUT', '/api/user', { id: app.id, quota: usedNow + 20 })
 const statuses = []
-for (let i = 0; i < 3; i++) statuses.push((await gw('/v1/responses', small.key, { model: 'smoke-gw-chat', input: 'hi' })).status)
-check('额度 20：前两次放行（不预占），第三次 429', JSON.stringify(statuses) === '[200,200,429]', statuses)
-res = await gw('/v1/responses', small.key, { model: 'smoke-gw-chat', input: 'hi' })
-json = await res.json()
-check('429 的错误类型是 insufficient_quota', json.error?.type === 'insufficient_quota', json)
-
-await admin('PUT', '/api/user', { id: app.id, quota: 1 })
+for (let i = 0; i < 3; i++) statuses.push((await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' })).status)
+check('应用额度剩 20：前两次放行，第三次 429', JSON.stringify(statuses) === '[200,200,429]', statuses)
 res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' })
 json = await res.json()
-check('应用额度用尽 429 app_quota_exhausted', res.status === 429 && json.error?.code === 'app_quota_exhausted', json)
+check('应用额度用尽 429 app_quota_exhausted', res.status === 429 && json.error?.type === 'insufficient_quota' && json.error?.code === 'app_quota_exhausted', json)
 await admin('PUT', '/api/user', { id: app.id, quota: 0 })
 
 await admin('PUT', '/api/token/?status_only=true', { id: token.id, status: 2 })
 res = await gw('/v1/responses', key, { model: 'smoke-gw-chat', input: 'hi' })
 check('禁用的令牌 401', res.status === 401, res.status)
 
-const ipToken = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-ip', unlimited_quota: true, expired_time: -1, model_limits: 'smoke-gw-chat', allow_ips: '10.0.0.0/8' })
+const ipToken = await admin('POST', '/api/token', { user_id: app.id, name: 'smoke-gw-ip', expired_time: -1, allow_ips: '10.0.0.0/8' })
 res = await gw('/v1/models', ipToken.key)
 check('来源 IP 不在白名单 401', res.status === 401, res.status)
 

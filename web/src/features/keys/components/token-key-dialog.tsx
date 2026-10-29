@@ -13,12 +13,15 @@ import {
 } from '@/components/ui/dialog'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
-import { useApiKeys } from './api-keys-provider'
-
 /** 新建或重新生成令牌后，显示一次完整密钥。关掉后服务端也查不到明文 */
-export function TokenKeyDialog() {
+export type RevealedKey = { name: string; key: string }
+
+export function TokenKeyDialog(props: {
+  revealed: RevealedKey | null
+  onClose: () => void
+}) {
   const { t } = useTranslation()
-  const { revealed, setRevealed } = useApiKeys()
+  const { revealed } = props
   const [copied, setCopied] = useState(false)
   const fullKey = revealed ? `sk-${revealed.key}` : ''
 
@@ -31,7 +34,7 @@ export function TokenKeyDialog() {
       open={!!revealed}
       onOpenChange={(open) => {
         if (!open) {
-          setRevealed(null)
+          props.onClose()
           setCopied(false)
         }
       }}
@@ -60,7 +63,14 @@ export function TokenKeyDialog() {
           {t('This is the only time the key is shown. If you lose it, regenerate it from the key menu.')}
         </p>
         <DialogFooter>
-          <Button onClick={() => setRevealed(null)}>{copied ? t('Done') : t('I have saved it')}</Button>
+          <Button
+            onClick={() => {
+              props.onClose()
+              setCopied(false)
+            }}
+          >
+            {copied ? t('Done') : t('I have saved it')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

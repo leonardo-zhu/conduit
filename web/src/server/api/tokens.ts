@@ -3,12 +3,12 @@
  * 返回 NewAPI 令牌的格式。
  *
  * 库里只存密钥的哈希，明文只在创建和重新生成时返回一次。
- * 额度：库里存上限 quota（0 不限）和已用 used；接口按 NewAPI 的 remain_quota / unlimited_quota 进出。
+ * 令牌没有自己的额度和模型白名单：额度只在应用上，令牌能用所属应用的全部别名。used 只用来统计。
  */
 import { generateTokenKey, hashTokenKey } from '../crypto'
-import { db, nowSeconds, parseJsonArray, transaction } from '../db'
+import { db, nowSeconds, transaction } from '../db'
 import { fail, ok, pageParams } from '../router'
-import { getApp, listAliases } from './apps'
+import { getApp } from './apps'
 import { route } from './registry'
 
 export interface TokenRow {
@@ -28,20 +28,18 @@ export interface TokenRow {
   last_used_at: number
 }
 
-/** NewAPI 的令牌状态：1 启用，2 禁用，3 已过期，4 额度用尽。后两种按字段现算 */
-export const TOKEN_STATUS = { ENABLED: 1, DISABLED: 2, EXPIRED: 3, EXHAUSTED: 4 } as const
+/** NewAPI 的令牌状态：1 启用，2 禁用，3 已过期（按过期时间现算） */
+export const TOKEN_STATUS = { ENABLED: 1, DISABLED: 2, EXPIRED: 3 } as const
 
 export function effectiveTokenStatus(row: TokenRow, now = nowSeconds()): number {
   if (row.status === TOKEN_STATUS.DISABLED) return TOKEN_STATUS.DISABLED
   if (row.expires_at !== -1 && row.expires_at <= now) return TOKEN_STATUS.EXPIRED
-  if (row.quota > 0 && row.used >= row.quota) return TOKEN_STATUS.EXHAUSTED
   return TOKEN_STATUS.ENABLED
 }
 
 const KEY_NOT_STORED = '令牌明文只在创建时显示一次，服务端不保存。丢了可以在操作菜单里“重新生成”'
 
 function toToken(row: TokenRow & { app_slug?: string }) {
-  const models = parseJsonArray(row.models)
   return {
     id: row.id,
     user_id: row.app_id,
@@ -50,18 +48,11 @@ function toToken(row: TokenRow & { app_slug?: string }) {
     // 前端会加 sk- 前缀显示
     key: `${row.key_prefix}****${row.key_last4}`,
     status: effectiveTokenStatus(row),
-    remain_quota: row.quota > 0 ? row.quota - row.used : 0,
     used_quota: row.used,
-    unlimited_quota: row.quota === 0,
     expired_time: row.expires_at,
     created_time: row.created_at,
     accessed_time: row.last_used_at,
-    group: 'default',
-    model_limits_enabled: true,
-    model_limits: models.join(','),
     allow_ips: row.allow_ips,
-    cross_group_retry: false,
-    allow_user_quota_query: false,
   }
 }
 
@@ -74,8 +65,18 @@ function getToken(id: number) {
 function listTokens(query: URLSearchParams) {
   const { page, size, offset } = pageParams(query)
   const keyword = (query.get('keyword') ?? '').trim()
-  const where = keyword ? 'WHERE t.name LIKE ? OR a.slug LIKE ?' : ''
-  const args = keyword ? [`%${keyword}%`, `%${keyword}%`] : []
+  const appId = Number(query.get('app_id') ?? 0)
+  const conditions: string[] = []
+  const args: (string | number)[] = []
+  if (keyword) {
+    conditions.push('(t.name LIKE ? OR a.slug LIKE ?)')
+    args.push(`%${keyword}%`, `%${keyword}%`)
+  }
+  if (appId) {
+    conditions.push('t.app_id = ?')
+    args.push(appId)
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const { total } = db()
     .prepare(`SELECT COUNT(*) AS total FROM tokens t JOIN apps a ON a.id = t.app_id ${where}`)
     .get(...args) as { total: number }
@@ -88,42 +89,21 @@ function listTokens(query: URLSearchParams) {
 interface TokenInput {
   user_id?: unknown
   name?: unknown
-  remain_quota?: unknown
-  unlimited_quota?: unknown
   expired_time?: unknown
-  model_limits?: unknown
   allow_ips?: unknown
 }
 
-/** 校验表单。appId：令牌所属应用（新建时取自表单，编辑时取自库里，不能转移） */
-function readTokenInput(input: TokenInput, appId: number, used: number) {
+/** 校验表单。令牌所属应用新建时取自表单，之后不能转移 */
+function readTokenInput(input: TokenInput) {
   const fields: Record<string, string | number> = {}
 
   const name = typeof input.name === 'string' ? input.name.trim() : ''
   if (!name) return { error: '请填写令牌名称' }
   fields.name = name.slice(0, 64)
 
-  if (input.unlimited_quota) {
-    fields.quota = 0
-  } else {
-    const remain = Number(input.remain_quota ?? 0)
-    if (!Number.isInteger(remain) || remain <= 0) return { error: '请设置大于 0 的额度，或选择不限额度' }
-    // 上限 = 已用 + 剩余
-    fields.quota = used + remain
-  }
-
   const expires = Number(input.expired_time ?? -1)
   if (!Number.isInteger(expires) || (expires !== -1 && expires <= 0)) return { error: '过期时间不对' }
   fields.expires_at = expires
-
-  const models = (typeof input.model_limits === 'string' ? input.model_limits.split(',') : [])
-    .map((m) => m.trim())
-    .filter(Boolean)
-  if (!models.length) return { error: '至少选择一个模型别名' }
-  const aliases = new Set(listAliases(appId).map((a) => a.name))
-  const unknown = models.filter((m) => !aliases.has(m))
-  if (unknown.length) return { error: `${unknown.join('、')} 不是这个应用的别名` }
-  fields.models = JSON.stringify([...new Set(models)])
 
   fields.allow_ips = typeof input.allow_ips === 'string' ? input.allow_ips.trim() : ''
   return { fields }
@@ -147,7 +127,7 @@ route('POST', '/api/token', ({ body }) => {
   const input = (body ?? {}) as TokenInput
   const app = getApp(Number(input.user_id))
   if (!app) return fail('请选择应用')
-  const { fields, error } = readTokenInput(input, app.id, 0)
+  const { fields, error } = readTokenInput(input)
   if (error || !fields) return fail(error ?? '参数错误')
   const { key, ...keyFields } = newKeyFields()
   const all = { ...fields, ...keyFields, app_id: app.id, created_at: nowSeconds() }
@@ -169,7 +149,7 @@ route('PUT', '/api/token', ({ body, query }) => {
     return ok(toToken(getToken(row.id)!))
   }
 
-  const { fields, error } = readTokenInput(input, row.app_id, row.used)
+  const { fields, error } = readTokenInput(input)
   if (error || !fields) return fail(error ?? '参数错误')
   const entries = Object.entries(fields)
   db()

@@ -77,18 +77,21 @@ await call('PUT', `/api/app/${notes.id}/aliases`, {
 
 const DAY = 86400
 const now = Math.floor(Date.now() / 1000)
-const token = (app, name, models, extra = {}) =>
-  call('POST', '/api/token', { user_id: app.id, name, model_limits: models.join(','), remain_quota: 5_000_000, expired_time: now + 60 * DAY, ...extra })
+// models 只决定示例用量记录里这个令牌调了哪些别名；令牌本身能用应用的全部别名
+const token = async (app, name, models, extra = {}) => ({
+  ...(await call('POST', '/api/token', { user_id: app.id, name, expired_time: now + 60 * DAY, ...extra })),
+  models,
+})
 
 const tokens = [
   await token(vita, 'vita-leonardo-iphone', ['vita-chat', 'vita-vision', 'vita-fast']),
   await token(vita, 'vita-leonardo-ipad', ['vita-chat', 'vita-vision', 'vita-fast']),
-  await token(vita, 'vita-dev-simulator', ['vita-chat', 'vita-fast'], { remain_quota: 500_000, expired_time: now + 7 * DAY }),
-  await token(notes, 'notes-server', ['notes-summary'], { unlimited_quota: true, expired_time: -1 }),
+  await token(vita, 'vita-dev-simulator', ['vita-chat', 'vita-fast'], { expired_time: now + 7 * DAY }),
+  await token(notes, 'notes-server', ['notes-summary'], { expired_time: -1 }),
 ]
 const old = await token(vita, 'vita-old-iphone', ['vita-chat'])
 await call('PUT', '/api/token/?status_only=true', { id: old.id, status: 2 })
-await token(notes, 'notes-test', ['notes-summary'], { unlimited_quota: true, expired_time: now - 2 * DAY })
+await token(notes, 'notes-test', ['notes-summary'], { expired_time: now - 2 * DAY })
 
 // 用量记录：固定种子，每次生成一样
 let seed = 42
@@ -109,7 +112,7 @@ const used = new Map()
 db.exec('BEGIN')
 for (let i = 0; i < 420; i++) {
   const t = pick(tokens)
-  const alias = pick(t.model_limits.split(','))
+  const alias = pick(t.models)
   const [upstream, model] = aliasTarget[alias]
   const failed = upstream.id === nous.id ? rand() < 0.6 : rand() < 0.04
   const input = failed ? 0 : Math.floor(800 + rand() * 6000)
@@ -128,10 +131,9 @@ for (let i = 0; i < 420; i++) {
     used.set(t.id, u)
   }
 }
-// 回填令牌和应用的已用量（上限 = 已用 + 原来的剩余）
+// 回填令牌和应用的已用量
 for (const [tokenId, u] of used) {
-  db.prepare('UPDATE tokens SET used = ?, quota = CASE quota WHEN 0 THEN 0 ELSE quota + ? END, last_used_at = ? WHERE id = ?')
-    .run(u.tokens, u.tokens, now - Math.floor(rand() * 3600), tokenId)
+  db.prepare('UPDATE tokens SET used = ?, last_used_at = ? WHERE id = ?').run(u.tokens, now - Math.floor(rand() * 3600), tokenId)
   db.prepare('UPDATE apps SET used = used + ?, request_count = request_count + ? WHERE id = ?').run(u.tokens, u.requests, u.app)
 }
 db.exec('COMMIT')

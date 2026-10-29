@@ -9,7 +9,6 @@ import {
   isForeignKeyViolation,
   isUniqueViolation,
   nowSeconds,
-  parseJsonArray,
   transaction,
 } from '../db'
 import { fail, ok, pageParams, type ApiRequest } from '../router'
@@ -212,8 +211,7 @@ route('GET', '/api/app/:id/aliases', ({ params }) => {
 })
 
 /**
- * 整体替换一个应用的别名。令牌白名单里引用了被删掉的别名时拒绝，
- * 免得令牌悄悄失去可用模型。
+ * 整体替换一个应用的别名。应用的令牌都能用全部别名，删掉的别名立即不可调用。
  */
 route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
   const app = getApp(Number(params.id))
@@ -232,18 +230,6 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
     aliases.push({ name, upstream_id: upstreamId, upstream_model: upstreamModel })
   }
 
-  const names = new Set(aliases.map((a) => a.name))
-  const tokens = db().prepare('SELECT name, models FROM tokens WHERE app_id = ?').all(app.id) as {
-    name: string
-    models: string
-  }[]
-  for (const token of tokens) {
-    const missing = parseJsonArray(token.models).filter((m) => !names.has(m))
-    if (missing.length) {
-      return fail(`令牌“${token.name}”还在用 ${missing.join('、')}，先从令牌里去掉再删除别名`)
-    }
-  }
-
   try {
     transaction(() => {
       db().prepare('DELETE FROM aliases WHERE app_id = ?').run(app.id)
@@ -259,7 +245,7 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
   return ok(listAliases(app.id))
 })
 
-// 令牌表单的模型下拉：传 app_id 时只列该应用的别名
+// 别名列表：传 app_id 时只列该应用的别名（概览页的示例请求用）
 route('GET', '/api/user/models', ({ query }) => {
   const appId = Number(query.get('app_id')) || undefined
   return ok([...new Set(listAliases(appId).map((a) => a.name))])

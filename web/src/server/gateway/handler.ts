@@ -19,7 +19,6 @@ import type { NextRequest } from 'next/server'
 import { listAliases } from '../api/apps'
 import { upstreamKey } from '../api/upstreams'
 import { clientIp } from '../auth'
-import { parseJsonArray } from '../db'
 import { authenticate, checkQuota, resolveAlias, type GatewayAuth, type RouteTarget } from './context'
 import { errorResponse, GatewayError } from './errors'
 import { recordUsage, estimateTokens } from './record'
@@ -289,13 +288,12 @@ export async function handleGateway(req: NextRequest, endpoint: Endpoint): Promi
   }
 }
 
-/** GET /v1/models：令牌可用的别名 */
+/** GET /v1/models：令牌所属应用的全部别名 */
 export function handleModels(req: NextRequest): Response {
   const requestId = requestIdOf(req)
   try {
     const auth = authenticate(req.headers, clientIp(req))
-    const allowed = new Set(parseJsonArray(auth.token.models))
-    const aliases = listAliases(auth.app.id).filter((a) => allowed.has(a.name))
+    const aliases = listAliases(auth.app.id)
     return Response.json(
       {
         object: 'list',

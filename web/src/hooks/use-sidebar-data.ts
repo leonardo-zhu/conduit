@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import {
   Activity,
   FileText,
-  Key,
   LayoutDashboard,
   Radio,
   AppWindow,
@@ -36,7 +35,7 @@ import type { SidebarData } from '@/components/layout/types'
  *
  * Conduit: 只保留网关用得到的页面（概览、令牌、用量、渠道、用户），
  * 去掉了聊天、钱包、兑换码、订阅、系统设置等。只有一个管理员，
- * 按用途分成“使用情况”和“配置”两组，不按角色分组。
+ * API 密钥在应用抽屉里管理。按用途分成“使用情况”和“配置”两组，不按角色分组。
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -56,11 +55,6 @@ export function useSidebarData(): SidebarData {
             title: t('Dashboard'),
             url: '/dashboard/models',
             icon: LayoutDashboard,
-          },
-          {
-            title: t('API Keys'),
-            url: '/keys',
-            icon: Key,
           },
           {
             title: t('Usage Logs'),

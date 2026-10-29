@@ -12,9 +12,8 @@
  * 规则：
  * - 每个有令牌的 NewAPI 用户对应一个应用：--map 指定的标识，否则用用户名（转成小写、连字符）。
  *   应用不存在时创建，额度不限。
- * - NewAPI 的额度单位是“额度”，不是 token，没法换算：导入的令牌都设为不限额度，有上限的会列出来，导入后手动设。
- * - 模型白名单原样导入。白名单里的模型名就是 Conduit 的别名；应用里还没有的别名会列出来，
- *   导入前或导入后在应用里补上（补齐之前，这些令牌在后台编辑会报错）。
+ * - Conduit 的令牌没有额度和模型白名单，能用应用的全部别名，额度只在应用上设。NewAPI 里有额度上限的令牌会列出来。
+ * - NewAPI 白名单里的模型名就是 Conduit 的别名；应用里还没有的别名会列出来，导入前或导入后在应用里补上。
  * - 已删除（软删除）的令牌跳过；哈希已存在的跳过，所以可以重复运行。
  * - 禁用的令牌保持禁用；过期时间、创建和最近使用时间照搬。
  */
@@ -106,10 +105,10 @@ for (const [slug, entry] of plan) {
     const models = t.model_limits_enabled ? String(t.model_limits ?? '').split(',').map((m) => m.trim()).filter(Boolean) : []
     const status = t.status === 2 ? '禁用' : t.expired_time !== -1 && t.expired_time <= now ? '已过期' : '启用'
     console.log(`  ${t.name}  sk-${t.key.slice(0, 4)}****${t.key.slice(-4)}  ${status}  模型：${models.join(', ') || '（无）'}`)
-    if (!models.length) warnings.push(`${slug}/${t.name}：没有模型白名单，导入后调用不了任何模型，需要在后台选别名`)
+    // 令牌能用应用的全部别名：NewAPI 里的模型白名单只用来提醒先把别名补齐
     const missing = models.filter((m) => !aliases.has(m))
     if (missing.length) warnings.push(`${slug}/${t.name}：应用里还没有别名 ${missing.join('、')}`)
-    if (!t.unlimited_quota) warnings.push(`${slug}/${t.name}：NewAPI 里有额度上限，导入为不限，需要的话在后台重新设`)
+    if (!t.unlimited_quota) warnings.push(`${slug}/${t.name}：NewAPI 里有额度上限，Conduit 只在应用上设额度`)
   }
 }
 for (const s of skipped) console.log(`跳过 ${s}`)
@@ -135,15 +134,14 @@ try {
     `INSERT INTO apps (slug, name, period_start, remark, created_at) VALUES (?, ?, ?, ?, ?)`
   )
   const insertToken = conduit.prepare(
-    `INSERT INTO tokens (app_id, name, key_hash, key_prefix, key_last4, status, expires_at, quota, used, models,
-       allow_ips, created_at, last_used_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`
+    `INSERT INTO tokens (app_id, name, key_hash, key_prefix, key_last4, status, expires_at, allow_ips, created_at,
+       last_used_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
   for (const [slug, entry] of plan) {
     const appId =
       entry.appId ?? Number(insertApp.run(slug, slug, monthStart, `从 NewAPI 用户 ${entry.from} 导入`, now).lastInsertRowid)
     for (const t of entry.tokens) {
-      const models = t.model_limits_enabled ? String(t.model_limits ?? '').split(',').map((m) => m.trim()).filter(Boolean) : []
       insertToken.run(
         appId,
         t.name,
@@ -152,7 +150,6 @@ try {
         t.key.slice(-4),
         t.status === 2 ? 2 : 1,
         t.expired_time ?? -1,
-        JSON.stringify([...new Set(models)]),
         t.allow_ips ?? '',
         t.created_time || now,
         t.accessed_time || 0
