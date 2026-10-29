@@ -21,7 +21,6 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarRail,
 } from '@/components/ui/sidebar'
 import { useLayout } from '@/context/layout-provider'
@@ -75,21 +74,6 @@ export function AppSidebar() {
           </motion.div>
         </AnimatePresence>
       </SidebarContent>
-
-      {/* NewAPI NOTICE（AGPLv3 第 7(b) 条附加条款）要求保留的署名和原项目链接 */}
-      <SidebarFooter className='text-muted-foreground px-4 py-3 text-[11px] leading-snug group-data-[collapsible=icon]:hidden'>
-        <span>
-          Frontend design and development by New API contributors.{' '}
-          <a
-            href='https://github.com/QuantumNous/new-api'
-            target='_blank'
-            rel='noreferrer'
-            className='hover:text-foreground underline underline-offset-2'
-          >
-            github.com/QuantumNous/new-api
-          </a>
-        </span>
-      </SidebarFooter>
 
       <SidebarRail />
     </Sidebar>

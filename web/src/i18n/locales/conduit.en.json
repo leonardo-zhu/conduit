@@ -141,5 +141,7 @@
   "No keys yet. Create one to call this app's aliases.": "No keys yet. Create one to call this app's aliases.",
   "One key per device or deployment, so you can revoke one without touching the others": "One key per device or deployment, so you can revoke one without touching the others",
   "Save the app first, then add keys to it": "Save the app first, then add keys to it",
-  "Shared by all keys of this app; 0 means unlimited": "Shared by all keys of this app; 0 means unlimited"
+  "Shared by all keys of this app; 0 means unlimited": "Shared by all keys of this app; 0 means unlimited",
+  "A self-hosted LLM gateway for personal apps": "A self-hosted LLM gateway for personal apps",
+  "Licensed under AGPL-3.0-or-later. Source code:": "Licensed under AGPL-3.0-or-later. Source code:"
 }
