@@ -97,5 +97,12 @@
   "Protocol": "Protocol",
   "Responses API (passed through)": "Responses API (passed through)",
   "Chat Completions (converted by the gateway)": "Chat Completions (converted by the gateway)",
-  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API."
+  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.",
+  "App": "App",
+  "The app that made the requests": "The app that made the requests",
+  "Other apps": "Other apps",
+  "User Analytics": "App Analytics",
+  "Top Users": "Top Apps",
+  "User Consumption Ranking": "App Consumption Ranking",
+  "User Consumption Trend": "App Consumption Trend"
 }

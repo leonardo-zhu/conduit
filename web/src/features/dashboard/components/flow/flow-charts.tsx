@@ -130,9 +130,10 @@ const FLOW_STAGE_META: Record<
   FlowNodeKind,
   { labelKey: string; descKey: string }
 > = {
+  // Conduit: NewAPI 的“用户”就是应用
   user: {
-    labelKey: 'User',
-    descKey: 'The user who made the requests',
+    labelKey: 'App',
+    descKey: 'The app that made the requests',
   },
   node: {
     labelKey: 'Node',
@@ -166,7 +167,7 @@ const FLOW_STAGE_LABEL_KEYS: Record<FlowNodeKind, string> = {
 }
 
 const FLOW_OTHER_NODE_LABEL_KEYS: Record<FlowNodeKind, string> = {
-  user: 'Other users',
+  user: 'Other apps',
   node: 'Other nodes',
   token: 'Other tokens',
   group: 'Other groups',
