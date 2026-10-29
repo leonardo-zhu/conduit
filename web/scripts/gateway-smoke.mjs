@@ -9,13 +9,16 @@
  *   pnpm dev                              # 一个终端
  *   node scripts/mock-upstream.mjs        # 另一个终端
  *   node scripts/gateway-smoke.mjs [http://localhost:3020] [密码]
+ *   MOCK_UPSTREAM_URL=http://host.docker.internal:3099 node scripts/gateway-smoke.mjs http://localhost:3031   # 网关在容器里
  */
 import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
 
 const BASE = process.argv[2] || 'http://localhost:3020'
 const PASSWORD = process.argv[3] || 'conduit-dev-local'
-const MOCK = 'http://127.0.0.1:3099'
+const MOCK = process.env.MOCK_URL || 'http://127.0.0.1:3099'
+// 网关访问假上游用的地址；网关跑在容器里时设成 http://host.docker.internal:3099
+const MOCK_FOR_GATEWAY = process.env.MOCK_UPSTREAM_URL || MOCK
 const db = new DatabaseSync(path.resolve(process.env.CONDUIT_DATA_DIR || '.data', 'conduit.db'))
 db.exec('PRAGMA foreign_keys = ON')
 
@@ -76,9 +79,9 @@ try {
 db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
-const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', type: 1, protocol: 'chat', base_url: MOCK, key: 'mock-chat-key' } })
-const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', type: 45, base_url: MOCK, key: 'mock-native-key' } })
-const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', type: 1, base_url: MOCK, key: 'k', status: 2 } })
+const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', type: 1, protocol: 'chat', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
+const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', type: 45, base_url: MOCK_FOR_GATEWAY, key: 'mock-native-key' } })
+const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', type: 1, base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
 check('火山方舟类型默认原生 Responses', nativeUp.protocol === 'responses', nativeUp.protocol)
 
 const app = await admin('POST', '/api/user', { username: 'smoke-gw', quota: 0 })
