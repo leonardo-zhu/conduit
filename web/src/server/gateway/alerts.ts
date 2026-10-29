@@ -177,7 +177,6 @@ export function noteQuotaRejected(auth: GatewayAuth, scope: 'app' | 'token') {
 function checkErrorRate(auth: GatewayAuth) {
   const now = nowSeconds()
   if (now - (errorRateChecked.get(auth.app.id) ?? 0) < ERROR_RATE_CHECK_INTERVAL) return
-  errorRateChecked.set(auth.app.id, now)
 
   const stats = db()
     .prepare(
@@ -185,7 +184,10 @@ function checkErrorRate(auth: GatewayAuth) {
        FROM usage_logs WHERE app_id = ? AND created_at >= ?`
     )
     .get(auth.app.id, now - ERROR_RATE_WINDOW) as { total: number; failed: number }
-  if (stats.total < ERROR_RATE_MIN_REQUESTS || stats.failed * 2 < stats.total) return
+  // 请求数还不够时不算一次检查，免得刚开始失败的那一分钟里漏掉
+  if (stats.total < ERROR_RATE_MIN_REQUESTS) return
+  errorRateChecked.set(auth.app.id, now)
+  if (stats.failed * 2 < stats.total) return
 
   safeRaiseEvent({
     kind: 'error_rate',
