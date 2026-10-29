@@ -26,10 +26,30 @@ import conduitZh from './locales/conduit.zh.json'
 import en from './locales/en.json'
 import zhCN from './locales/zh.json'
 
+/**
+ * Conduit 把 NewAPI 的“渠道”叫“上游”。原翻译里有三百多条提到渠道，
+ * 在这里统一替换，不逐条覆盖；conduit.*.json 里的文案不受影响。
+ */
+function renameChannels(
+  translation: Record<string, string>,
+  replace: (value: string) => string
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(translation).map(([key, value]) => [key, replace(value)])
+  )
+}
+
+const enRenamed = renameChannels(en.translation, (v) =>
+  v.replaceAll('Channel', 'Upstream').replaceAll('channel', 'upstream')
+)
+const zhRenamed = renameChannels(zhCN.translation, (v) =>
+  v.replaceAll('渠道', '上游')
+)
+
 // Conduit 新增或改写的文案放在 conduit.*.json，覆盖在 NewAPI 原翻译之上
 export const resources = {
-  en: { translation: { ...en.translation, ...conduitEn } },
-  zhCN: { translation: { ...zhCN.translation, ...conduitZh } },
+  en: { translation: { ...enRenamed, ...conduitEn } },
+  zhCN: { translation: { ...zhRenamed, ...conduitZh } },
 } as const
 
 i18n
