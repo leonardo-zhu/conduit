@@ -450,7 +450,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
 
           {props.log.token_name && (
             <DetailRow
-              label={t('Token')}
+              label={t('Key')}
               value={logTokenName(props.log, t)}
               mono
             />

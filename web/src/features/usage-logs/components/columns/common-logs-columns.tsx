@@ -58,6 +58,7 @@ import type { LogOtherData } from '../../types'
 import { DetailsDialog } from '../dialogs/details-dialog'
 import { ModelBadge } from '../model-badge'
 import { TimingMetricsCell, StreamTpsCell } from '../timing-metrics-cell'
+import { useFilterLogsByApp } from '../../hooks/use-filter-logs-by-app'
 import { useUsageLogsContext } from '../usage-logs-provider'
 
 interface DetailSegment {
@@ -343,11 +344,8 @@ export function useCommonLogsColumns(
           header: t('App'),
           accessorFn: (row) => row.username,
           cell: function UserCell({ row }) {
-            const {
-              sensitiveVisible,
-              setSelectedUserId,
-              setUserInfoDialogOpen,
-            } = useUsageLogsContext()
+            const { sensitiveVisible } = useUsageLogsContext()
+            const filterByApp = useFilterLogsByApp()
             const log = row.original
 
             if (!log.username) return null
@@ -356,10 +354,10 @@ export function useCommonLogsColumns(
               <button
                 type='button'
                 className='flex items-center gap-1.5 text-left'
+                title={t('Show only this app')}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setSelectedUserId(log.user_id)
-                  setUserInfoDialogOpen(true)
+                  filterByApp(log.username)
                 }}
               >
                 <Avatar className='ring-border/60 size-6 ring-1 max-sm:hidden'>
@@ -402,7 +400,7 @@ export function useCommonLogsColumns(
 
     columns.push({
       accessorKey: 'token_name',
-      header: t('Token'),
+      header: t('Key'),
       cell: function TokenNameCell({ row }) {
         const { sensitiveVisible } = useUsageLogsContext()
         const log = row.original

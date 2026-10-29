@@ -25,11 +25,7 @@ import type { NavGroup } from '@/components/layout/types'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSidebarConfig } from '@/hooks/use-sidebar-config'
 
-import { UserInfoDialog } from './components/dialogs/user-info-dialog'
-import {
-  UsageLogsProvider,
-  useUsageLogsContext,
-} from './components/usage-logs-provider'
+import { UsageLogsProvider } from './components/usage-logs-provider'
 import { UsageLogsTable } from './components/usage-logs-table'
 import {
   isUsageLogsSectionId,
@@ -42,7 +38,7 @@ const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
 const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
   common: {
-    titleKey: 'Common Logs',
+    titleKey: 'Usage Logs',
   },
   drawing: {
     titleKey: 'Drawing Logs',
@@ -60,11 +56,6 @@ function UsageLogsContent() {
     params.section && isUsageLogsSectionId(params.section)
       ? params.section
       : USAGE_LOGS_DEFAULT_SECTION
-  const {
-    selectedUserId,
-    userInfoDialogOpen,
-    setUserInfoDialogOpen,
-  } = useUsageLogsContext()
   const tabNavGroups = useMemo<NavGroup[]>(
     () => [
       {
@@ -134,11 +125,6 @@ function UsageLogsContent() {
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
-      <UserInfoDialog
-        userId={selectedUserId}
-        open={userInfoDialogOpen}
-        onOpenChange={setUserInfoDialogOpen}
-      />
 
     </>
   )

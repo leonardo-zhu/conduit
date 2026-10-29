@@ -148,7 +148,6 @@
   "Usage / Quota": "Usage / Quota",
   "Used this month": "Used this month",
   "Used in total": "Used in total",
-  "App Information": "App Information",
   "All apps": "All apps",
   "No apps": "No apps",
   "Filter by app ID": "Filter by app ID",
@@ -156,5 +155,7 @@
   "No apps yet, or none match your search or filters.": "No apps yet, or none match your search or filters.",
   "Failed to update the app": "Failed to update the app",
   "Optional. An alias is the app's own model name pointing to a provider model; repointing it takes effect immediately without changing the app.": "Optional. An alias is the app's own model name pointing to a provider model; repointing it takes effect immediately without changing the app.",
-  "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.": "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2."
+  "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.": "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.",
+  "Show only this app": "Show only this app",
+  "Key name": "Key name"
 }

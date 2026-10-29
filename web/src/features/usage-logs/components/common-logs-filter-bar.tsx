@@ -398,7 +398,7 @@ export function CommonLogsFilterBar<TData>(
     <>
       <LogsFilterField>
         <LogsFilterInput
-          placeholder={t('Token Name')}
+          placeholder={t('Key name')}
           className={sensitiveInputClass}
           value={filters.token || ''}
           onChange={(e) => handleChange('token', e.target.value)}

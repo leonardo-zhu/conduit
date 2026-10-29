@@ -148,7 +148,6 @@
   "Usage / Quota": "用量 / 额度",
   "Used this month": "本月已用",
   "Used in total": "累计已用",
-  "App Information": "应用信息",
   "All apps": "全部应用",
   "No apps": "没有应用",
   "Filter by app ID": "按应用标识筛选",
@@ -156,5 +155,7 @@
   "No apps yet, or none match your search or filters.": "还没有应用，或没有符合搜索、筛选条件的应用。",
   "Failed to update the app": "更新应用失败",
   "Optional. An alias is the app's own model name pointing to a provider model; repointing it takes effect immediately without changing the app.": "选填。别名是应用自己的模型名，指向某个服务商的某个模型；改了指向立即生效，应用不用改。",
-  "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.": "没有别名。这个应用的密钥也可以直接用“服务商标识/模型名”调用，如 minimax/MiniMax-M2。"
+  "No aliases. Keys of this app can still call provider-id/model directly, e.g. minimax/MiniMax-M2.": "没有别名。这个应用的密钥也可以直接用“服务商标识/模型名”调用，如 minimax/MiniMax-M2。",
+  "Show only this app": "只看这个应用",
+  "Key name": "密钥名称"
 }
