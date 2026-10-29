@@ -338,10 +338,13 @@ export function ChannelMutateDrawer({
                   <FormItem>
                     <FormLabel>{t('Key')}</FormLabel>
                     <FormControl>
+                      {/* 用文本框加 CSS 遮盖：type=password 会让 Chrome 把整个表单当成登录表单，
+                          无视 autocomplete=off，把“API 地址”当用户名弹出已保存的账号 */}
                       <Input
                         {...field}
-                        type='password'
-                        autoComplete='off'
+                        type='text'
+                        spellCheck={false}
+                        className='[-webkit-text-security:disc]'
                         placeholder={
                           isUpdate
                             ? t('Leave empty to keep the current key')
