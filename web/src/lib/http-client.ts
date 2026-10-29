@@ -25,7 +25,10 @@ import {
   getFreshAuthHeaders,
   refreshAuthentication,
 } from '@/lib/auth-session'
-import { handleServerError } from '@/lib/handle-server-error'
+import {
+  handleServerError,
+  markServerErrorHandled,
+} from '@/lib/handle-server-error'
 import {
   getServerErrorMessage,
   safeServerErrorMessage,
@@ -74,6 +77,16 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
   return request
 }) as typeof api.get
 
+// Conduit: 多个请求同时 401 时只提示一次（固定 toast id，后来的替换先来的）
+function reportSessionExpired(error: unknown): void {
+  handleServerError(
+    { message: t('Session expired!'), [safeServerErrorMessage]: true, cause: error },
+    undefined,
+    undefined,
+    { toastId: 'session-expired' }
+  )
+}
+
 function redirectToSignIn(): void {
   if (
     typeof window !== 'undefined' &&
@@ -96,7 +109,12 @@ api.interceptors.response.use(
     const skipErrorHandler = config?.skipErrorHandler
     const status = error?.response?.status
 
-    if (status === 401) {
+    const auth = useAuthStore.getState().auth
+    // Conduit: 已确认未登录（如刚退出）时，页面卸载前补发的请求会 401，
+    // 不再刷新会话、也不提示“会话已过期”，跳转交给路由守卫
+    if (status === 401 && !auth.session && auth.bootstrapState === 'complete') {
+      markServerErrorHandled(error)
+    } else if (status === 401) {
       if (config && !config.skipAuthRefresh && !config.authRetry) {
         config.authRetry = true
         const outcome = await refreshAuthentication()
@@ -112,31 +130,15 @@ api.interceptors.response.use(
         }
 
         if (outcome.kind === 'anonymous' || outcome.kind === 'out_of_sync') {
-          if (!skipErrorHandler) {
-            handleServerError({
-              message: t('Session expired!'),
-              [safeServerErrorMessage]: true,
-              cause: error,
-            })
-          }
+          if (!skipErrorHandler) reportSessionExpired(error)
           redirectToSignIn()
         }
       } else if (config?.authRetry) {
         clearAuthentication(false)
-        if (!skipErrorHandler) {
-          handleServerError({
-            message: t('Session expired!'),
-            [safeServerErrorMessage]: true,
-            cause: error,
-          })
-        }
+        if (!skipErrorHandler) reportSessionExpired(error)
         redirectToSignIn()
       } else if (!skipErrorHandler) {
-        handleServerError({
-          message: t('Session expired!'),
-          [safeServerErrorMessage]: true,
-          cause: error,
-        })
+        reportSessionExpired(error)
       }
     }
     if (axios.isAxiosError(error)) error.message = getServerErrorMessage(error)

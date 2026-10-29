@@ -34,7 +34,9 @@ export function markServerErrorHandled(error: unknown): void {
 export function handleServerError(
   error: unknown,
   fallbackMessage?: string,
-  presentation?: { title: string; description?: string }
+  presentation?: { title: string; description?: string },
+  // Conduit: 同一个 id 的提示只显示一条
+  options?: { toastId?: string }
 ): void {
   if (isServerErrorCancelled(error)) return
   const sources = getServerErrorSources(error)
@@ -44,8 +46,11 @@ export function handleServerError(
   const message =
     presentation?.title || getServerErrorMessage(error, fallbackMessage)
   if (presentation?.description) {
-    toast.error(message, { description: presentation.description })
+    toast.error(message, {
+      description: presentation.description,
+      id: options?.toastId,
+    })
   } else {
-    toast.error(message)
+    toast.error(message, { id: options?.toastId })
   }
 }
