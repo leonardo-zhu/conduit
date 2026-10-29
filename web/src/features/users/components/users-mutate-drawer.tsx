@@ -20,12 +20,13 @@ For commercial licensing, please contact support@quantumnous.com
  * Conduit: 应用（NewAPI 用户）的新建 / 编辑抽屉。
  *
  * 应用不登录，所以去掉了 NewAPI 的密码、角色、分组、管理员权限矩阵和二次验证；
- * 只保留应用标识、显示名、总额度（token）和备注。
+ * 只保留应用标识、显示名、额度（token）和备注，另加 Conduit 的模型别名。
  */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AppWindow, WalletCards } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AppWindow, Plus, Route, Trash2, WalletCards } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useFieldArray, useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
@@ -50,6 +51,10 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select'
+import {
   Sheet,
   SheetClose,
   SheetContent,
@@ -59,11 +64,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { getChannels } from '@/features/channels/api'
 import { handleServerError } from '@/lib/handle-server-error'
 
-import { createUser, updateUser } from '../api'
+import { createUser, getAppAliases, saveAppAliases, updateUser } from '../api'
 import type { User } from '../types'
 import { useUsers } from './users-provider'
+
+const ALIAS_PATTERN = /^[a-z0-9][a-z0-9._-]*$/
 
 function getSchema(t: (key: string) => string) {
   return z.object({
@@ -73,7 +81,18 @@ function getSchema(t: (key: string) => string) {
       .regex(/^[a-z0-9][a-z0-9-]*$/, t('Use lowercase letters, digits and hyphens')),
     display_name: z.string().trim(),
     quota: z.number().int().min(0),
+    quota_period: z.enum(['none', 'month']),
     remark: z.string(),
+    aliases: z.array(
+      z.object({
+        name: z
+          .string()
+          .trim()
+          .regex(ALIAS_PATTERN, t('Use lowercase letters, digits and . _ -')),
+        upstream_id: z.number().int().positive(t('Select an upstream')),
+        upstream_model: z.string().trim().min(1, t('Enter the upstream model')),
+      })
+    ),
   })
 }
 
@@ -83,7 +102,9 @@ const EMPTY_VALUES: FormValues = {
   username: '',
   display_name: '',
   quota: 0,
+  quota_period: 'none',
   remark: '',
+  aliases: [],
 }
 
 type UsersMutateDrawerProps = {
@@ -98,6 +119,7 @@ export function UsersMutateDrawer({
   currentRow,
 }: UsersMutateDrawerProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const isUpdate = !!currentRow
   const { triggerRefresh } = useUsers()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -105,6 +127,18 @@ export function UsersMutateDrawer({
   const form = useForm<FormValues>({
     resolver: zodResolver(getSchema(t)),
     defaultValues: EMPTY_VALUES,
+  })
+  const aliasFields = useFieldArray({ control: form.control, name: 'aliases' })
+
+  const { data: upstreams = [] } = useQuery({
+    queryKey: ['conduit-upstream-options'],
+    queryFn: async () => (await getChannels({ p: 1, page_size: 100 })).data?.items ?? [],
+    enabled: open,
+  })
+  const { data: savedAliases, isLoading: aliasesLoading } = useQuery({
+    queryKey: ['app-aliases', currentRow?.id],
+    queryFn: () => getAppAliases(currentRow!.id),
+    enabled: open && !!currentRow,
   })
 
   useEffect(() => {
@@ -115,11 +149,20 @@ export function UsersMutateDrawer({
             username: currentRow.username,
             display_name: currentRow.display_name ?? '',
             quota: currentRow.quota,
+            quota_period: currentRow.quota_period ?? 'none',
             remark: currentRow.remark ?? '',
+            aliases: (savedAliases ?? []).map(({ name, upstream_id, upstream_model }) => ({
+              name,
+              upstream_id,
+              upstream_model,
+            })),
           }
         : EMPTY_VALUES
     )
-  }, [open, currentRow, form])
+  }, [open, currentRow, savedAliases, form])
+
+  const slug = form.watch('username')
+  const aliases = form.watch('aliases')
 
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true)
@@ -128,16 +171,25 @@ export function UsersMutateDrawer({
         username: values.username,
         display_name: values.display_name || values.username,
         quota: values.quota,
+        quota_period: values.quota_period,
         remark: values.remark,
       }
       const result = currentRow
         ? await updateUser({ ...payload, id: currentRow.id })
         : await createUser({ ...payload, role: 1 })
-      if (!result.success) {
+      if (!result.success || !result.data?.id) {
         handleServerError(result, t('Failed to save app'))
         return
       }
+      // 应用先存好，再整体保存别名；新建时用返回的 id
+      const aliasResult = await saveAppAliases(result.data.id, values.aliases)
+      if (!aliasResult.success) {
+        handleServerError(aliasResult, t('App saved, but its aliases could not be saved'))
+        triggerRefresh()
+        return
+      }
       toast.success(currentRow ? t('App updated') : t('App created'))
+      await queryClient.invalidateQueries({ queryKey: ['app-aliases'] })
       onOpenChange(false)
       triggerRefresh()
     } catch (error) {
@@ -149,7 +201,7 @@ export function UsersMutateDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className={sideDrawerContentClassName('sm:max-w-[600px]')}>
+      <SheetContent className={sideDrawerContentClassName('sm:max-w-[640px]')}>
         <SheetHeader className={sideDrawerHeaderClassName()}>
           <SheetTitle>{isUpdate ? t('Update App') : t('Create App')}</SheetTitle>
           <SheetDescription>
@@ -179,7 +231,9 @@ export function UsersMutateDrawer({
                       <Input {...field} placeholder='vita' disabled={isUpdate} />
                     </FormControl>
                     <FormDescription>
-                      {t('Used as the prefix of key names and aliases, e.g. vita-chat')}
+                      {isUpdate
+                        ? t('The app ID cannot be changed after creation')
+                        : t('Used as the prefix of key names and aliases, e.g. vita-chat')}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -215,9 +269,136 @@ export function UsersMutateDrawer({
 
             <SideDrawerSection>
               <SideDrawerSectionHeader
+                title={t('Model aliases')}
+                description={t(
+                  'Keys of this app call these aliases; each points to a model of an upstream. Changing the target takes effect immediately.'
+                )}
+                icon={<Route className='size-4' />}
+                iconTone='success'
+              />
+              {aliasesLoading ? (
+                <p className='text-muted-foreground text-sm'>{t('Loading...')}</p>
+              ) : (
+                <div className='space-y-3'>
+                  {aliasFields.fields.map((item, index) => {
+                    const upstream = upstreams.find(
+                      (u) => u.id === aliases[index]?.upstream_id
+                    )
+                    const listId = `alias-models-${item.id}`
+                    return (
+                      <div
+                        key={item.id}
+                        className='grid grid-cols-[1fr_auto] gap-2 rounded-md border p-3 sm:grid-cols-[1fr_1fr_1fr_auto]'
+                      >
+                        <FormField
+                          control={form.control}
+                          name={`aliases.${index}.name`}
+                          render={({ field }) => (
+                            <FormItem className='col-span-1'>
+                              <FormLabel className='text-xs'>{t('Alias')}</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder={`${slug || 'app'}-chat`} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button
+                          type='button'
+                          variant='ghost'
+                          size='icon'
+                          className='text-muted-foreground hover:text-destructive mt-5 self-start sm:order-last'
+                          aria-label={t('Remove alias')}
+                          onClick={() => aliasFields.remove(index)}
+                        >
+                          <Trash2 className='size-4' />
+                        </Button>
+                        <FormField
+                          control={form.control}
+                          name={`aliases.${index}.upstream_id`}
+                          render={({ field }) => (
+                            <FormItem className='col-span-2 sm:col-span-1'>
+                              <FormLabel className='text-xs'>{t('Upstream')}</FormLabel>
+                              <FormControl>
+                                <NativeSelect
+                                  className='w-full'
+                                  value={String(field.value || '')}
+                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                >
+                                  <NativeSelectOption value=''>
+                                    {t('Select an upstream')}
+                                  </NativeSelectOption>
+                                  {upstreams.map((u) => (
+                                    <NativeSelectOption key={u.id} value={u.id}>
+                                      {u.name}
+                                    </NativeSelectOption>
+                                  ))}
+                                </NativeSelect>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`aliases.${index}.upstream_model`}
+                          render={({ field }) => (
+                            <FormItem className='col-span-2 sm:col-span-1'>
+                              <FormLabel className='text-xs'>{t('Upstream model')}</FormLabel>
+                              <FormControl>
+                                <Input {...field} list={listId} autoComplete='off' />
+                              </FormControl>
+                              {/* 候选项取自上游里填的模型列表，也可以直接输入 */}
+                              <datalist id={listId}>
+                                {(upstream?.models ?? '')
+                                  .split(',')
+                                  .filter(Boolean)
+                                  .map((m) => (
+                                    <option key={m} value={m} />
+                                  ))}
+                              </datalist>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )
+                  })}
+                  {aliasFields.fields.length === 0 && (
+                    <p className='text-muted-foreground rounded-md border border-dashed py-4 text-center text-sm'>
+                      {t('No aliases yet. Keys of this app cannot call any model until you add one.')}
+                    </p>
+                  )}
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    disabled={upstreams.length === 0}
+                    onClick={() =>
+                      aliasFields.append({
+                        name: slug ? `${slug}-` : '',
+                        upstream_id: upstreams.length === 1 ? upstreams[0].id : 0,
+                        upstream_model: '',
+                      })
+                    }
+                  >
+                    <Plus className='size-4' />
+                    {t('Add alias')}
+                  </Button>
+                  {upstreams.length === 0 && (
+                    <p className='text-muted-foreground text-xs'>
+                      {t('Add an upstream first, then aliases can point to it')}
+                    </p>
+                  )}
+                </div>
+              )}
+            </SideDrawerSection>
+
+            <SideDrawerSection>
+              <SideDrawerSectionHeader
                 title={t('Budget')}
                 icon={<WalletCards className='size-4' />}
-                iconTone='success'
+                iconTone='warning'
               />
               <FormField
                 control={form.control}
@@ -237,8 +418,30 @@ export function UsersMutateDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Shared by all keys of this app; each key can have its own cap')}
+                      {t('Shared by all keys of this app; 0 means unlimited. Each key can have its own cap.')}
                     </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='quota_period'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Quota period')}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        className='w-full'
+                        value={field.value}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <NativeSelectOption value='none'>{t('Never reset')}</NativeSelectOption>
+                        <NativeSelectOption value='month'>
+                          {t('Reset on the 1st of each month')}
+                        </NativeSelectOption>
+                      </NativeSelect>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -32,6 +32,7 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  AppAlias,
 } from './types'
 
 // A step-up proof is single-use, so the request carrying it must never be
@@ -265,5 +266,19 @@ export async function adminUnbindCustomOAuth(
     `/api/user/${userId}/oauth/bindings/${providerId}`,
     securityProofConfig(proofToken)
   )
+  return res.data
+}
+
+// Conduit: 应用的模型别名，整体读写
+export async function getAppAliases(appId: number): Promise<AppAlias[]> {
+  const res = await api.get(`/api/app/${appId}/aliases`)
+  return requireServerSuccess(res.data).data ?? []
+}
+
+export async function saveAppAliases(
+  appId: number,
+  aliases: AppAlias[]
+): Promise<ApiResponse<AppAlias[]>> {
+  const res = await api.put(`/api/app/${appId}/aliases`, { aliases })
   return res.data
 }
