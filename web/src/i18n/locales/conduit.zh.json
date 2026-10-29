@@ -97,5 +97,12 @@
   "Protocol": "协议",
   "Responses API (passed through)": "Responses API（直接透传）",
   "Chat Completions (converted by the gateway)": "Chat Completions（由网关转换）",
-  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "应用始终调用 /v1/responses。上游不支持 Responses API 时选 Chat Completions，由网关转换。"
+  "Apps always call /v1/responses. Choose Chat Completions if the upstream does not support the Responses API.": "应用始终调用 /v1/responses。上游不支持 Responses API 时选 Chat Completions，由网关转换。",
+  "App": "应用",
+  "The app that made the requests": "发起请求的应用",
+  "Other apps": "其他应用",
+  "User Analytics": "应用统计",
+  "Top Users": "热门应用",
+  "User Consumption Ranking": "应用消耗排行",
+  "User Consumption Trend": "应用消耗趋势"
 }

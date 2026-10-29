@@ -248,7 +248,8 @@ const NODE_BUILDERS: Record<
 }
 
 const ROLE_FLOW_STAGES: Record<FlowRole, FlowNodeKind[]> = {
-  root: ['user', 'node', 'token', 'group', 'model', 'channel'],
+  // Conduit: 只有一个节点、一个分组，链路去掉这两层
+  root: ['user', 'token', 'model', 'channel'],
   admin: ['user', 'group', 'model', 'channel'],
   user: ['token', 'group', 'model'],
 }
