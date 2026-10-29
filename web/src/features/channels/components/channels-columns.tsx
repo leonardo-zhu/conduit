@@ -303,23 +303,28 @@ export function useChannelsColumns(
         minSize: 200,
       },
 
-      // Conduit: 类型列换成协议列。上游不区分服务商，协议决定网关是直接透传还是转换
+      // Conduit: 上游在网关里提供哪些接口，应用按这个选调用 /v1/chat/completions 还是 /v1/responses
       {
-        accessorKey: 'protocol',
-        header: t('Protocol'),
+        id: 'endpoints',
+        accessorKey: 'responses_mode',
+        header: t('Endpoints'),
         cell: ({ row }) => {
-          const protocol = (row.original as Channel).protocol
-          if (!protocol) return null
+          const mode = (row.original as Channel).responses_mode ?? 'none'
           return (
-            <StatusBadge
-              label={protocol === 'responses' ? 'Responses' : 'Chat'}
-              variant={protocol === 'responses' ? 'blue' : 'neutral'}
-              size='sm'
-              copyable={false}
-            />
+            <div className='flex items-center gap-1'>
+              <StatusBadge label='Chat' variant='neutral' size='sm' copyable={false} />
+              {mode !== 'none' && (
+                <StatusBadge
+                  label={mode === 'native' ? 'Responses' : `Responses · ${t('Converted')}`}
+                  variant={mode === 'native' ? 'blue' : 'purple'}
+                  size='sm'
+                  copyable={false}
+                />
+              )}
+            </div>
           )
         },
-        size: 120,
+        size: 200,
         enableSorting: false,
       },
 

@@ -29,12 +29,17 @@ export interface UpstreamRow {
   created_at: number
   test_time: number
   response_time: number
-  /** responses：原生 Responses API，直接透传；chat：只支持 Chat Completions，由网关转换 */
-  protocol: UpstreamProtocol
+  /** 旧字段，已由 responses_mode 取代，不再读写 */
+  protocol: string
+  /**
+   * 上游的 Responses API：native 原生支持，直接转发；convert 不支持，由网关从 Chat Completions 转换；
+   * none 不提供，/v1/responses 拒绝。Chat Completions 默认所有上游都支持
+   */
+  responses_mode: ResponsesMode
 }
 
-export type UpstreamProtocol = 'responses' | 'chat'
-const PROTOCOLS = new Set<UpstreamProtocol>(['responses', 'chat'])
+export type ResponsesMode = 'native' | 'convert' | 'none'
+const RESPONSES_MODES = new Set<ResponsesMode>(['native', 'convert', 'none'])
 
 /** upstreams.type 是 NewAPI 的渠道类型，Conduit 不区分服务商，新建时固定写 1，不再读写 */
 const LEGACY_TYPE = 1
@@ -69,7 +74,7 @@ function toChannel(row: UpstreamRow, used = 0) {
     key_last4: row.key_last4,
     status: row.status,
     models: parseJsonArray(row.models).join(','),
-    protocol: row.protocol,
+    responses_mode: row.responses_mode,
     model_mapping: '',
     test_model: row.test_model || null,
     group: 'default',
@@ -122,7 +127,7 @@ interface ChannelInput {
   test_model?: unknown
   status?: unknown
   remark?: unknown
-  protocol?: unknown
+  responses_mode?: unknown
 }
 
 function readUpstreamInput(body: unknown, partial: boolean) {
@@ -160,10 +165,11 @@ function readUpstreamInput(body: unknown, partial: boolean) {
     fields.status = status === UPSTREAM_STATUS.ENABLED ? UPSTREAM_STATUS.ENABLED : UPSTREAM_STATUS.DISABLED
   }
   if (has('remark')) fields.remark = typeof input.remark === 'string' ? input.remark.slice(0, 255) : ''
-  // 协议不按服务商推断：新建时必须指定，编辑时没传就不改
-  if (has('protocol')) {
-    if (!PROTOCOLS.has(input.protocol as UpstreamProtocol)) return { error: '请选择协议：responses 或 chat' }
-    fields.protocol = input.protocol as string
+  // 新建时没传就是不提供 Responses API（只有 Chat Completions），不按服务商推断；编辑时没传就不改
+  if (has('responses_mode')) {
+    const mode = input.responses_mode ?? 'none'
+    if (!RESPONSES_MODES.has(mode as ResponsesMode)) return { error: 'Responses API 只能是 native、convert 或 none' }
+    fields.responses_mode = mode as string
   }
   return { fields }
 }

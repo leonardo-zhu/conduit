@@ -3,7 +3,7 @@
  *
  * type 区分调用方要给出的不同提示（见 Vita 的 Provider 集成规范）：
  * - authentication_error（401）：令牌无效、过期、禁用，或来源 IP 不允许。具体原因只写服务端日志
- * - invalid_request_error（400）：参数不合法、模型别名不可用
+ * - invalid_request_error（400）：参数不合法、模型别名不可用、别名的上游不提供所调的接口
  * - insufficient_quota（429）：令牌或应用额度用尽
  * - upstream_unavailable（503）：别名指向的上游已停用
  * - upstream_error（502）：上游报错或连不上

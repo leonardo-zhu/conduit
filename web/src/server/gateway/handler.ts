@@ -1,14 +1,14 @@
 /**
  * 网关数据面：/v1/responses 和 /v1/chat/completions 的处理流程。
  *
- *   令牌鉴权 → 别名解析 → 额度检查 → 按上游协议改写请求 → 转发
+ *   令牌鉴权 → 别名解析 → 额度检查 → 按上游提供的接口改写请求 → 转发
  *   → 流式：边转发边读用量；非流式：读完整响应（需要时转换格式）
  *   → 记用量、扣额度
  *
- * 上游协议（upstreams.protocol）：
- * - responses：原生支持 Responses API（火山方舟），/v1/responses 直接透传
- * - chat：只支持 Chat Completions，/v1/responses 在这里转换成 Chat 再转回来
- * /v1/chat/completions 两种上游都直接转发到上游的 /chat/completions。
+ * 应用调哪个入口由应用自己选。上游提供的接口（upstreams.responses_mode）：
+ * - /v1/chat/completions：所有上游都直接转发到上游的 /chat/completions
+ * - /v1/responses：native 直接转发到上游的 /responses；convert 由网关转成 Chat 再转回来；
+ *   none 表示这个上游不提供 Responses API，直接拒绝
  */
 import { randomUUID } from 'node:crypto'
 
@@ -53,10 +53,17 @@ function buildUpstreamRequest(endpoint: Endpoint, target: RouteTarget, body: Bod
     }
     return { path: '/chat/completions', body: withModel, convert: false }
   }
-  if (target.upstream.protocol === 'responses') {
+  if (target.upstream.responses_mode === 'native') {
     return { path: '/responses', body: prepareNativeResponses(withModel), convert: false }
   }
-  return { path: '/chat/completions', body: prepareChatFromResponses(withModel), convert: true }
+  if (target.upstream.responses_mode === 'convert') {
+    return { path: '/chat/completions', body: prepareChatFromResponses(withModel), convert: true }
+  }
+  throw new GatewayError(
+    'invalid_request_error',
+    'responses_not_supported',
+    `模型别名 ${target.alias} 的上游不提供 Responses API，请改用 /v1/chat/completions`
+  )
 }
 
 /** 估算用：请求里的文本长度（去掉 base64 图片） */

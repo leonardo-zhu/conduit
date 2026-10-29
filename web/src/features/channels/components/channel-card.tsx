@@ -32,7 +32,7 @@ const SENSITIVE_MASK = '••••'
 /**
  * Bespoke channel card for the card view. Reuses every column's existing cell
  * renderer via `flexRender`, so the table's information and interactions are
- * preserved: row selection, protocol badge, id, name/remark + warning
+ * preserved: row selection, endpoint badges, id, name/remark + warning
  * icons, status (with tooltips), models, response/test times, and the per-row
  * actions menu.
  *
@@ -58,7 +58,7 @@ function ChannelCardComponent({
   }
 
   const selectCell = renderCell('select')
-  const protocolCell = renderCell('protocol')
+  const endpointsCell = renderCell('endpoints')
   const nameCell = renderCell('name')
   const statusCell = renderCell('status')
   const actionsCell = renderCell('actions')
@@ -81,11 +81,11 @@ function ChannelCardComponent({
         data-state={isSelected ? 'selected' : undefined}
         className='flex min-w-0 flex-col gap-3'
       >
-        {/* Row 1: selection + protocol, with status badge + actions menu */}
+        {/* Row 1: selection + endpoints, with status badge + actions menu */}
         <div className='flex items-center justify-between gap-2'>
           <div className='flex min-w-0 flex-1 items-center gap-2'>
             {selectCell && <span className='shrink-0'>{selectCell}</span>}
-            <div className='shrink-0'>{protocolCell}</div>
+            <div className='shrink-0'>{endpointsCell}</div>
           </div>
           <div className='flex shrink-0 items-center gap-1.5'>
             {showStatusBadge && statusCell}
