@@ -632,7 +632,8 @@ export async function handleTestAllChannels(
           // 只留简短原因（如“服务商返回 401”），完整报错点卡片上的测试按钮看
           description: failed
             .map((r) => `${r.name}：${shortTestError(r.error ?? '')}`)
-            .join('；'),
+            .join('\n'),
+          classNames: { description: 'whitespace-pre-line' },
         }
       )
     }
