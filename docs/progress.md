@@ -1,6 +1,6 @@
 # 自建网关进度记录
 
-最后更新：2026-10-29（阶段 2 管理接口做完）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-29（阶段 3 网关数据面做完，未接真实上游验证）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
 ## 当前状态
 
@@ -10,6 +10,7 @@
   - 其后几个提交：管理员登录、重构计划、本文件、删减工具脚本。
   - `6dc9f62`..`e91bbc2`：Passkey 登录（接口、/api/status、管理弹窗、删掉 /otp）。
   - `5634f56`..`fc4b8ff`：数据表、管理接口改为真实实现、前端按新模型调整、示例数据和 NewAPI 导入脚本。
+  - `4151840`..`c751b4d`：网关数据面（/v1/*）、上游协议字段、网关冒烟测试。
 
 ## 已完成
 
@@ -69,6 +70,22 @@
   - `import-newapi.mjs`：从 `one-api.db` 的拷贝导入令牌，默认只预览，`--map 用户名=应用标识`、`--apply`。用假的 NewAPI 库验证过：哈希对得上、软删除跳过、重复运行跳过。
 - 已验证：两个冒烟测试全过；浏览器里看过应用（别名编辑、删除被占用别名的提示）、令牌（按应用过滤别名、一次性密钥、重新生成）、上游（模型列表、启停状态）、日志和看板。
 
+### 阶段 3：网关数据面
+
+- 入口：`web/src/app/v1/{responses,chat/completions,models}/route.ts`，逻辑在 `web/src/server/gateway/`。不走后台的会话登录，用 `Authorization: Bearer sk-...` 鉴权。
+- 流程：令牌鉴权 → 别名解析（令牌白名单 + 应用的别名）→ 额度检查（不预占）→ 按上游协议改写请求 → 转发 → 读用量 → 一个事务里写用量记录、扣令牌和应用额度。
+- 上游协议（`upstreams.protocol`，上游抽屉里选）：
+  - `responses`：原生 Responses API（火山方舟），`/v1/responses` 透传，只去掉 `store`、`metadata` 等它不认的字段。
+  - `chat`：只支持 Chat Completions，`/v1/responses` 由网关转成 Chat，再把响应（含流式）转回 Responses。
+  - `/v1/chat/completions` 两种上游都直接转发到 `/chat/completions`。
+- 协议转换迁自 `adapter/lib/transforms.ts`，改了三处：流式事件改用标准名 `response.output_text.delta`（adapter 用的是非标准的 `content_part.delta`）；不再追加 `[DONE]`；上游没给 usage 时 `response.completed` 不带 usage。
+- 记账：以上游返回的 usage 为准；拿不到时按字符数估算（约 2 字符 / token）并标“估算”。上游报错不扣额度。调用方中途断开：立即中止上游，按已收到的输出估算，状态码记 499。
+- 超时：等响应头 2 分钟；非流式总时长 5 分钟；流式 5 分钟没有任何数据算超时（流里发 `error` 事件后结束）。
+- 错误格式：`{ error: { type, code, message } }`。type：`authentication_error`（401，原因只进日志）、`invalid_request_error`（400）、`insufficient_quota`（429）、`upstream_unavailable`（503）、`upstream_error`（502，不透出上游细节）、`upstream_timeout`（504）。
+- `X-Request-Id`：调用方给了就沿用（否则生成），写进用量记录并在响应头返回。不支持 `previous_response_id`（400）。
+- 已验证（`scripts/gateway-smoke.mjs` + `scripts/mock-upstream.mjs`，44 项）：阶段 3 验证清单的三项都过了——流式用量与上游一致；调用方断开时上游连接立即被中止、只按已收到的输出扣；20 个并发请求扣减正好 20 × 15。另有鉴权、白名单、额度、转换（文本、`<think>`、tool call、tools 格式）和错误格式。
+- **没有对真实上游验证过**：火山方舟、MiniMax、Nous 都只用假上游测过。部署前要用真实密钥各跑一遍（流式文本、tool call、图片输入）。
+
 ## 还没做的
 
 ### 前端收尾（阶段 1）
@@ -87,9 +104,17 @@
 - 接口路径仍是 NewAPI 的（`/api/user`、`/api/channel`），以后要不要改成 `/api/apps`、`/api/upstreams` 再说。
 - 上游的“类型”还是 NewAPI 的渠道编号；阶段 3 需要的是“协议”（Responses 原生 / 需转 Chat），到时再加字段。
 
-### 阶段 3–5
+### 阶段 3 的遗留
 
-- 数据面：`/v1/responses`、`/v1/chat/completions`、`/v1/models`；迁入 adapter 的协议转换；流式用量、断开中止、并发扣减。
+- 用真实上游验证（见上）；对照上游控制台的用量对账。
+- Vita 设计文档里的路由策略（备用上游链、按别名配置超时 / 重试 / 参数覆盖）没做，目前一个别名只指向一个上游。
+- 令牌的“最大并发”限制没做；图片输入的体积上限没设。
+- 用量记录每个请求写一次库；计划里的“批量写入”（减少 TF 卡写入）等实测后再定。
+- 使用日志页面还不显示“估算”标记和 499 / 超时这类状态。
+- adapter 里的自定义首页（`/_home`）没迁过来。
+
+### 阶段 4–5
+
 - 部署：Next.js standalone 的 ARM 镜像、compose、CI 改为构建新服务，实测内存（预算 100–150MB）。
 - 并行验证、切换 Vita、下线 NewAPI、更新 `docs/setup.md` 和 `docs/apps.md`。
 
@@ -113,6 +138,7 @@ node scripts/seed-dev.mjs    # 另开终端，写入示例数据
 - **TypeScript 是 7.0（Go 原生版），没有 JS API**，需要分析代码的工具只能解析 `tsc` 的输出。
 - 假接口改了 `src/mock/data.ts` 后，热更新会重新执行 handler 文件；路由表按“方法 + 路径”覆盖注册，避免命中旧的那份。
 - **删掉页面后 `pnpm typecheck` 会报 `.next/types/validator.ts` 找不到模块**：dev 服务不会清理，跑 `pnpm exec next typegen` 重新生成。
+- **IP 白名单和登录限速按 `X-Forwarded-For` 的第一个地址判断**：只在 Caddy 后面才可信（Caddy 默认会丢掉不可信来源带的 XFF 重新设置）。服务端口不要直接暴露到公网。
 - **令牌白名单引用的别名不存在时，令牌在后台编辑会报错**：导入 NewAPI 令牌后先在应用里把别名补齐。
 - 改了会话 cookie 的签名格式（加了 `kind`），升级前发出的会话都失效，需要重新登录。
 - 应用内浏览器窗格在后台时，页面切换动画会停在模糊的中间帧，截图前多等一下或用读取文本代替。
