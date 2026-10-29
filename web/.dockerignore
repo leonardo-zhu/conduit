@@ -1,0 +1,11 @@
+# 本地数据和密钥绝不进镜像
+.data
+.env*
+!.env.example
+# 构建产物和依赖在镜像里重新生成
+.next
+node_modules
+# 开发脚本不需要；NewAPI 导入脚本要在服务器上跑，留着
+scripts
+!scripts/import-newapi.mjs
+*.tsbuildinfo
