@@ -46,11 +46,10 @@ import {
 } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
-import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { getUserModels } from '@/lib/api'
-import { handleServerError } from '@/lib/handle-server-error'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { ROLE } from '@/lib/roles'
 import { requireServerSuccess } from '@/lib/server-error-message'
@@ -293,28 +292,20 @@ function RequestPreview(props: {
   const handleCopyRequest = async () => {
     if (!props.example.keyId || isCopying) return
 
+    // Conduit: 服务端不存令牌明文，复制的命令用环境变量代替密钥
     setIsCopying(true)
     try {
-      const result = await fetchTokenKey(props.example.keyId)
-      const key = result.success && result.data?.key ? result.data.key : ''
-      if (!key) {
-        handleServerError(result, t('Failed to copy to clipboard'))
-        return
-      }
-
-      const realCurl = buildCurlCommand({
+      const curl = buildCurlCommand({
         endpoint: props.example.endpoint,
-        apiKey: `sk-${key}`,
+        apiKey: '$CONDUIT_API_KEY',
         model: props.example.model,
       })
-      const copied = await copyToClipboard(realCurl)
+      const copied = await copyToClipboard(curl)
       if (copied) {
-        toast.success(t('Copied to clipboard'))
+        toast.success(t('Copied. Set CONDUIT_API_KEY to your key before running it.'))
       } else {
         toast.error(t('Failed to copy to clipboard'))
       }
-    } catch (error) {
-      handleServerError(error, t('Failed to copy to clipboard'))
     } finally {
       setIsCopying(false)
     }

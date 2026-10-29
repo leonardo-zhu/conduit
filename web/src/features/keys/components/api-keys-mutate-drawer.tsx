@@ -99,20 +99,12 @@ export function ApiKeysMutateDrawer({
   const { t } = useTranslation()
   const isUpdate = !!currentRow
   const currentRowId = currentRow?.id
-  const { triggerRefresh } = useApiKeys()
+  const { triggerRefresh, setRevealed } = useApiKeys()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [initializedTarget, setInitializedTarget] = useState<string | null>(
     null
   )
-
-  // Fetch models
-  const { data: modelsData } = useQuery({
-    queryKey: ['user-models'],
-    queryFn: async () => requireServerSuccess(await getUserModels()),
-    enabled: open,
-    staleTime: 0,
-  })
 
   // Conduit: 令牌归属的应用
   const { data: apps = [], isFetched: appsFetched } = useApps(open)
@@ -129,13 +121,31 @@ export function ApiKeysMutateDrawer({
     staleTime: 0,
   })
 
-  const models = modelsData?.data || []
   const schema = useMemo(() => getApiKeyFormSchema(t), [t])
 
   const form = useForm<ApiKeyFormValues>({
     resolver: zodResolver(schema),
     defaultValues: getApiKeyFormDefaultValues(),
   })
+
+  // Conduit: 可选的模型只列所选应用的别名
+  const appId = form.watch('user_id')
+  const { data: modelsData } = useQuery({
+    queryKey: ['user-models', appId],
+    queryFn: async () => requireServerSuccess(await getUserModels(appId)),
+    enabled: open && !!appId,
+    staleTime: 0,
+  })
+  const models = modelsData?.data || []
+
+  // 换了应用后，去掉已选但不属于新应用的别名
+  useEffect(() => {
+    if (!modelsData?.data) return
+    const available = new Set(modelsData.data)
+    const selected = form.getValues('model_limits')
+    const kept = selected.filter((m) => available.has(m))
+    if (kept.length !== selected.length) form.setValue('model_limits', kept)
+  }, [modelsData, form])
 
   // Load existing data when updating
   useEffect(() => {
@@ -202,6 +212,10 @@ export function ApiKeysMutateDrawer({
           toast.success(t(SUCCESS_MESSAGES.API_KEY_CREATED))
           onOpenChange(false)
           triggerRefresh()
+          // Conduit: 明文只在这里返回一次
+          if (result.data?.key) {
+            setRevealed({ name: result.data.name, key: result.data.key })
+          }
         } else {
           handleServerError(result, t(ERROR_MESSAGES.CREATE_FAILED))
         }

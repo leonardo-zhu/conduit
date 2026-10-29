@@ -99,20 +99,10 @@ export async function updateApiKeyStatus(
   return res.data
 }
 
-// Fetch the real (unmasked) key for a token by ID
-export async function fetchTokenKey(
+// Conduit: 服务端只存哈希，查不到明文。重新生成后旧密钥立即失效，新明文只返回这一次
+export async function regenerateApiKey(
   id: number
-): Promise<{ success: boolean; message?: string; data?: { key: string } }> {
-  const res = await api.post(`/api/token/${id}/key`)
-  return res.data
-}
-
-// Batch fetch real (unmasked) keys for multiple tokens
-export async function fetchTokenKeysBatch(ids: number[]): Promise<{
-  success: boolean
-  message?: string
-  data?: { keys: Record<number, string> }
-}> {
-  const res = await api.post('/api/token/batch/keys', { ids })
+): Promise<ApiResponse<ApiKey & { key: string }>> {
+  const res = await api.post(`/api/token/${id}/regenerate`)
   return res.data
 }

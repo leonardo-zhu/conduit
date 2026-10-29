@@ -17,15 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { Row } from '@tanstack/react-table'
-import {
-  Trash2,
-  Edit,
-  Power,
-  PowerOff,
-  Copy,
-  Link,
-  Loader2,
-} from 'lucide-react'
+import { Trash2, Edit, Power, PowerOff, RefreshCw, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -42,27 +34,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { encodeChannelConnectionInfo } from '@/lib/channel-connection-info'
-import { copyToClipboard } from '@/lib/copy-to-clipboard'
 import { handleServerError } from '@/lib/handle-server-error'
 
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
-
-function getServerAddress(): string {
-  try {
-    const raw = localStorage.getItem('status')
-    if (raw) {
-      const status = JSON.parse(raw)
-      if (status.server_address) return status.server_address as string
-    }
-  } catch {
-    /* empty */
-  }
-  return window.location.origin
-}
 
 type DataTableRowActionsProps<TData> = {
   row: Row<TData>
@@ -73,16 +50,9 @@ export function DataTableRowActions<TData>({
 }: DataTableRowActionsProps<TData>) {
   const { t } = useTranslation()
   const apiKey = apiKeySchema.parse(row.original)
-  const {
-    setOpen,
-    setCurrentRow,
-    triggerRefresh,
-    resolveRealKey,
-    loadingKeys,
-  } = useApiKeys()
+  const { setOpen, setCurrentRow, triggerRefresh } = useApiKeys()
   const isEnabled = apiKey.status === API_KEY_STATUS.ENABLED
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
-  const isRealKeyLoading = Boolean(loadingKeys[apiKey.id])
 
   const toggleLabel = isEnabled ? t('Disable') : t('Enable')
 
@@ -168,36 +138,16 @@ export function DataTableRowActions<TData>({
         contentClassName='w-[200px]'
         modal={false}
       >
+        {/* Conduit: 服务端不存明文，不能复制已有密钥，只能重新生成 */}
         <DropdownMenuItem
-          disabled={isRealKeyLoading}
-          onClick={async () => {
-            const realKey = await resolveRealKey(apiKey.id)
-            if (!realKey) return
-            const ok = await copyToClipboard(realKey)
-            if (ok) toast.success(t('Copied'))
+          onClick={() => {
+            setCurrentRow(apiKey)
+            setOpen('regenerate')
           }}
         >
-          {t('Copy Key')}
+          {t('Regenerate key')}
           <DropdownMenuShortcut>
-            <Copy size={16} />
-          </DropdownMenuShortcut>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={isRealKeyLoading}
-          onClick={async () => {
-            const realKey = await resolveRealKey(apiKey.id)
-            if (!realKey) return
-            const connStr = encodeChannelConnectionInfo(
-              realKey,
-              getServerAddress()
-            )
-            const ok = await copyToClipboard(connStr)
-            if (ok) toast.success(t('Copied'))
-          }}
-        >
-          {t('Copy Connection Info')}
-          <DropdownMenuShortcut>
-            <Link size={16} />
+            <RefreshCw size={16} />
           </DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
