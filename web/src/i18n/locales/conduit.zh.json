@@ -16,7 +16,6 @@
   "App created": "应用已创建",
   "Total quota (tokens)": "总额度（token）",
   "Use lowercase letters, digits and hyphens": "只能使用小写字母、数字和连字符",
-  "Used as the prefix of key names and aliases, e.g. vita-chat": "用作令牌名和别名的前缀，如 vita-chat",
   "An app groups the keys of one client or service and shares its budget": "一个应用对应一个客户端或服务，名下的令牌共享预算",
   "Shared by all keys of this app; each key can have its own cap": "应用下所有令牌共享，每个令牌还可以单独设上限",
   "Configure an upstream provider and the model aliases it serves": "配置一个服务商，以及它承载的模型别名",
@@ -163,5 +162,6 @@
   "{{failed}} of {{count}} providers failed": "{{count}} 个服务商中 {{failed}} 个测试失败",
   "7 days": "7 天",
   "1 hour": "1 小时",
-  "1 day": "1 天"
+  "1 day": "1 天",
+  "A unique ID shown in usage logs, filters and alerts; it cannot be changed later. Also the default prefix of key names and aliases": "唯一标识，使用日志、筛选和提醒里用它区分应用，创建后不能改。也是密钥名和别名的默认前缀"
 }
