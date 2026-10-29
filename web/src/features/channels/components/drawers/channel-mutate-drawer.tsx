@@ -21,11 +21,13 @@ For commercial licensing, please contact support@quantumnous.com
  *
  * NewAPI 原抽屉有 5000 多行，覆盖四十多种渠道类型的专属配置（Azure、Vertex、AWS、
  * 多 Key、参数覆盖、请求头透传等）。Conduit 只接 OpenAI 兼容、自定义、火山方舟和
- * MiniMax，这里沿用原抽屉的布局组件和模型映射编辑器，只保留用得到的字段。
+ * MiniMax，这里沿用原抽屉的布局组件，只保留用得到的字段。
+ *
+ * 别名属于应用，在应用里配置；这里只填上游提供哪些模型，供别名选择和测试用。
  */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQueryClient } from '@tanstack/react-query'
-import { KeyRound, Route, Settings2 } from 'lucide-react'
+import { Boxes, Download, KeyRound, Loader2, Settings2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -70,11 +72,10 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { handleServerError } from '@/lib/handle-server-error'
 
-import { createChannel, updateChannel } from '../../api'
+import { createChannel, fetchUpstreamModels, updateChannel } from '../../api'
 import { CHANNEL_STATUS } from '../../constants'
 import { channelsQueryKeys, getChannelTypeLabel } from '../../lib'
 import type { Channel } from '../../types'
-import { ModelMappingEditor } from '../model-mapping-editor'
 
 /** Conduit 接入的上游类型：1 OpenAI 兼容，8 自定义，45 火山方舟，35 MiniMax */
 const UPSTREAM_TYPES = [1, 8, 45, 35] as const
@@ -88,8 +89,7 @@ function getSchema(t: (key: string) => string, isUpdate: boolean) {
     key: isUpdate
       ? z.string()
       : z.string().trim().min(1, t('Please enter the API key')),
-    models: z.array(z.string()).min(1, t('Add at least one model alias')),
-    model_mapping: z.string(),
+    models: z.array(z.string()),
     test_model: z.string(),
     enabled: z.boolean(),
     remark: z.string(),
@@ -104,7 +104,6 @@ const EMPTY_VALUES: FormValues = {
   base_url: '',
   key: '',
   models: [],
-  model_mapping: '',
   test_model: '',
   enabled: true,
   remark: '',
@@ -117,7 +116,6 @@ function toFormValues(channel: Channel): FormValues {
     base_url: channel.base_url ?? '',
     key: '',
     models: channel.models.split(',').filter(Boolean),
-    model_mapping: channel.model_mapping ?? '',
     test_model: channel.test_model ?? '',
     enabled: channel.status === CHANNEL_STATUS.ENABLED,
     remark: channel.remark ?? '',
@@ -130,7 +128,6 @@ function toPayload(values: FormValues): Partial<Channel> {
     type: values.type,
     base_url: values.base_url.replace(/\/+$/, '') || null,
     models: values.models.join(','),
-    model_mapping: values.model_mapping.trim() || null,
     test_model: values.test_model || null,
     // 需求不含渠道自动禁用
     auto_ban: 0,
@@ -169,6 +166,27 @@ export function ChannelMutateDrawer({
   }, [open, currentRow, form])
 
   const models = form.watch('models')
+  const [isFetchingModels, setIsFetchingModels] = useState(false)
+
+  // 从上游的 GET /models 拉取，并入已填的模型（只有保存过的上游才有密钥可用）
+  const handleFetchModels = async () => {
+    if (!currentRow) return
+    setIsFetchingModels(true)
+    try {
+      const result = await fetchUpstreamModels(currentRow.id)
+      if (!result.success || !result.data) {
+        handleServerError(result, t('Failed to fetch models'))
+        return
+      }
+      const merged = [...new Set([...form.getValues('models'), ...result.data])]
+      form.setValue('models', merged, { shouldDirty: true })
+      toast.success(t('Fetched {{count}} models', { count: result.data.length }))
+    } catch (error) {
+      handleServerError(error, t('Failed to fetch models'))
+    } finally {
+      setIsFetchingModels(false)
+    }
+  }
 
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true)
@@ -205,7 +223,7 @@ export function ChannelMutateDrawer({
             {isUpdate ? t('Update Channel') : t('Create Channel')}
           </SheetTitle>
           <SheetDescription>
-            {t('Configure an upstream provider and the model aliases it serves')}
+            {t('Configure an upstream provider: address, key and the models it offers')}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -299,11 +317,11 @@ export function ChannelMutateDrawer({
 
             <SideDrawerSection>
               <SideDrawerSectionHeader
-                title={t('Model aliases')}
+                title={t('Upstream models')}
                 description={t(
-                  'Apps call these aliases; map each alias to the model name the upstream expects'
+                  'Models this upstream offers. Aliases are configured per app and pick from this list.'
                 )}
-                icon={<Route className='size-4' />}
+                icon={<Boxes className='size-4' />}
                 iconTone='success'
               />
               <FormField
@@ -311,38 +329,37 @@ export function ChannelMutateDrawer({
                 name='models'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Aliases')}</FormLabel>
                     <FormControl>
                       <MultiSelect
                         options={field.value.map((m) => ({ label: m, value: m }))}
                         selected={field.value}
                         onChange={field.onChange}
                         allowCreate
-                        placeholder={t('e.g. vita-chat')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name='model_mapping'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Alias to upstream model')}</FormLabel>
-                    <FormControl>
-                      <ModelMappingEditor
-                        value={field.value}
-                        onChange={field.onChange}
-                        sourceModelOptions={models}
+                        placeholder={t('e.g. doubao-seed-1-6-251015')}
                       />
                     </FormControl>
                     <FormDescription>
-                      {t(
-                        'Changing the upstream model here takes effect immediately; apps keep using the alias'
-                      )}
+                      {isUpdate
+                        ? t('Type a model name and press Enter, or fetch the list from the upstream')
+                        : t('Type a model name and press Enter; after saving you can also fetch the list from the upstream')}
                     </FormDescription>
+                    {isUpdate && (
+                      <Button
+                        type='button'
+                        variant='outline'
+                        size='sm'
+                        className='w-fit'
+                        disabled={isFetchingModels}
+                        onClick={handleFetchModels}
+                      >
+                        {isFetchingModels ? (
+                          <Loader2 className='size-4 animate-spin' />
+                        ) : (
+                          <Download className='size-4' />
+                        )}
+                        {t('Fetch models from upstream')}
+                      </Button>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -367,7 +384,7 @@ export function ChannelMutateDrawer({
                         onChange={(e) => field.onChange(e.target.value)}
                       >
                         <NativeSelectOption value=''>
-                          {t('First alias')}
+                          {t('First model')}
                         </NativeSelectOption>
                         {models.map((m) => (
                           <NativeSelectOption key={m} value={m}>
