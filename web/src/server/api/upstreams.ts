@@ -1,6 +1,7 @@
 /**
- * 上游：模型服务商的一个接入点（地址 + 密钥）。后台沿用 NewAPI 的“渠道”接口（/api/channel），
- * 返回 NewAPI 渠道的格式；models 是上游提供的模型名，别名在应用下配置（见 apps.ts）。
+ * 上游（界面上叫“服务商”）：模型服务商的一个接入点（地址 + 密钥）。后台沿用 NewAPI 的“渠道”接口
+ * （/api/channel），返回 NewAPI 渠道的格式；models 是上游提供的模型名，别名在应用下配置（见 apps.ts）。
+ * slug 是标识，应用可以不配别名，直接用“标识/模型名”调用。
  *
  * 密钥用 CONDUIT_MASTER_KEY 加密后存库，接口只返回末四位。
  */
@@ -8,6 +9,7 @@ import { decryptSecret, encryptSecret } from '../crypto'
 import {
   db,
   isForeignKeyViolation,
+  isUniqueViolation,
   nowSeconds,
   parseJsonArray,
   transaction,
@@ -18,6 +20,7 @@ import { route } from './registry'
 export interface UpstreamRow {
   id: number
   name: string
+  slug: string
   type: number
   base_url: string
   key_enc: string
@@ -47,9 +50,20 @@ const RESPONSES_MODES = new Set<ResponsesMode>(['native', 'convert', 'none'])
 const LEGACY_TYPE = 1
 const UPSTREAM_STATUS = { ENABLED: 1, DISABLED: 2 } as const
 const TEST_TIMEOUT_MS = 20_000
+/** 标识不能含 /，“标识/模型名”按第一个 / 拆开 */
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]*$/
+const SLUG_TAKEN = '这个标识已被其他服务商使用'
 
 export function getUpstream(id: number): UpstreamRow | undefined {
   return db().prepare('SELECT * FROM upstreams WHERE id = ?').get(id) as UpstreamRow | undefined
+}
+
+export function listEnabledUpstreams(): UpstreamRow[] {
+  return db().prepare('SELECT * FROM upstreams WHERE status = 1 ORDER BY id').all() as unknown as UpstreamRow[]
+}
+
+export function getUpstreamBySlug(slug: string): UpstreamRow | undefined {
+  return db().prepare('SELECT * FROM upstreams WHERE slug = ?').get(slug) as UpstreamRow | undefined
 }
 
 export function upstreamKey(upstream: UpstreamRow): string {
@@ -71,6 +85,7 @@ function toChannel(row: UpstreamRow, used = 0) {
     id: row.id,
     type: row.type,
     name: row.name,
+    slug: row.slug,
     base_url: row.base_url,
     key: '',
     key_last4: row.key_last4,
@@ -108,8 +123,8 @@ function toChannel(row: UpstreamRow, used = 0) {
 function listUpstreams(query: URLSearchParams) {
   const { page, size, offset } = pageParams(query, 20)
   const keyword = (query.get('keyword') ?? '').trim()
-  const where = keyword ? 'WHERE name LIKE ? OR models LIKE ?' : ''
-  const args = keyword ? [`%${keyword}%`, `%${keyword}%`] : []
+  const where = keyword ? 'WHERE name LIKE ? OR slug LIKE ? OR models LIKE ?' : ''
+  const args = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`] : []
   const rows = db()
     .prepare(`SELECT * FROM upstreams ${where} ORDER BY id`)
     .all(...args) as unknown as UpstreamRow[]
@@ -124,6 +139,7 @@ function listUpstreams(query: URLSearchParams) {
 
 interface ChannelInput {
   name?: unknown
+  slug?: unknown
   base_url?: unknown
   key?: unknown
   models?: unknown
@@ -143,6 +159,11 @@ function readUpstreamInput(body: unknown, partial: boolean) {
     const name = typeof input.name === 'string' ? input.name.trim() : ''
     if (!name) return { error: '请填写名称' }
     fields.name = name
+  }
+  if (has('slug')) {
+    const slug = typeof input.slug === 'string' ? input.slug.trim() : ''
+    if (!SLUG_PATTERN.test(slug)) return { error: '标识只能用小写字母、数字和 . _ -，并以字母或数字开头' }
+    fields.slug = slug
   }
   if (!partial) fields.type = LEGACY_TYPE
   if (has('base_url')) {
@@ -228,8 +249,13 @@ route('POST', '/api/channel', ({ body }) => {
   const input = (body as { channel?: unknown })?.channel ?? body
   const { fields, error } = readUpstreamInput(input, false)
   if (error || !fields) return fail(error ?? '参数错误')
-  const id = insertUpstream(fields)
-  return ok(toChannel(getUpstream(id)!))
+  try {
+    const id = insertUpstream(fields)
+    return ok(toChannel(getUpstream(id)!))
+  } catch (e) {
+    if (isUniqueViolation(e)) return fail(SLUG_TAKEN)
+    throw e
+  }
 })
 
 route('PUT', '/api/channel', ({ body }) => {
@@ -237,7 +263,12 @@ route('PUT', '/api/channel', ({ body }) => {
   if (!getUpstream(id)) return fail('服务商不存在')
   const { fields, error } = readUpstreamInput(body, true)
   if (error || !fields) return fail(error ?? '参数错误')
-  updateUpstream(id, fields)
+  try {
+    updateUpstream(id, fields)
+  } catch (e) {
+    if (isUniqueViolation(e)) return fail(SLUG_TAKEN)
+    throw e
+  }
   return ok(toChannel(getUpstream(id)!))
 })
 
@@ -270,12 +301,14 @@ route('POST', '/api/channel/batch', ({ body }) => {
   return 'error' in result ? fail(result.error) : ok(result.deleted)
 })
 
-// 复制：密钥一并复制（仍是加密的），名称加后缀
+// 复制：密钥一并复制（仍是加密的），名称加后缀，标识加上 -copy（重了再加序号）
 route('POST', '/api/channel/copy/:id', ({ params, query }) => {
   const row = getUpstream(Number(params.id))
   if (!row) return fail('服务商不存在')
   const { id: _id, created_at: _c, test_time: _t, response_time: _r, ...rest } = row
-  const id = insertUpstream({ ...rest, name: `${row.name}${query.get('suffix') ?? '_复制'}` })
+  let slug = `${row.slug}-copy`
+  for (let n = 2; getUpstreamBySlug(slug); n++) slug = `${row.slug}-copy${n}`
+  const id = insertUpstream({ ...rest, slug, name: `${row.name}${query.get('suffix') ?? '_复制'}` })
   return ok({ id })
 })
 

@@ -76,20 +76,26 @@ console.log('\n上游')
 
 const noKey = await call('POST', '/api/channel', {
   mode: 'single',
-  channel: { name: 'smoke-up', base_url: 'https://example.com/v1' },
+  channel: { name: 'smoke-up', slug: 'smoke-up', base_url: 'https://example.com/v1' },
 })
 check('没填密钥被拒', !noKey.success, noKey)
 
 const badMode = await call('POST', '/api/channel', {
   mode: 'single',
-  channel: { name: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x', responses_mode: 'chat' },
+  channel: { name: 'smoke-up', slug: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x', responses_mode: 'chat' },
 })
 check('Responses 方式不合法被拒', !badMode.success, badMode)
+
+const badUpSlug = await call('POST', '/api/channel', {
+  channel: { name: 'smoke-up', slug: 'Smoke/Up', base_url: 'https://example.com/v1', key: 'sk-x' },
+})
+check('服务商标识不合法被拒', !badUpSlug.success, badUpSlug)
 
 const upstream = await call('POST', '/api/channel', {
   mode: 'single',
   channel: {
     name: 'smoke-up',
+    slug: 'smoke-up',
     base_url: 'https://example.com/v1/',
     key: 'sk-upstream-secret-1234',
     models: 'model-a,model-b',
@@ -108,9 +114,15 @@ const keepKey = await call('PUT', '/api/channel', { id: upstreamId, name: 'smoke
 const after = db.prepare('SELECT key_enc FROM upstreams WHERE id = ?').get(upstreamId)
 check('编辑时密钥留空不改', keepKey.success && after.key_enc === stored.key_enc, keepKey)
 
+const dupSlug = await call('POST', '/api/channel', {
+  channel: { name: 'smoke-up-2', slug: 'smoke-up', base_url: 'https://example.com/v1', key: 'sk-x' },
+})
+check('标识重复被拒', !dupSlug.success && dupSlug.message.includes('标识'), dupSlug)
+
 const copied = await call('POST', `/api/channel/copy/${upstreamId}?suffix=-copy`)
 check('复制上游', copied.success, copied)
 const copyId = copied.data?.id
+check('复制时标识加 -copy', db.prepare('SELECT slug FROM upstreams WHERE id = ?').get(copyId)?.slug === 'smoke-up-copy', copyId)
 
 // ---------------------------------------------------------------------------
 console.log('\n别名')

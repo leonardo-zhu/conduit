@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **网关**：OpenAI 格式的 `/v1/chat/completions`、`/v1/responses`，Anthropic 格式的 `/v1/messages`，以及 `/v1/models`，应用自己选调哪个。应用只认别名，别名指向某个服务商的某个模型。服务商按协议配地址，不区分服务商：OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 可以原生支持、由网关转换（Chat ↔ Responses，流式照常）或不提供；Anthropic 兼容地址选填，填了就提供 `/v1/messages`，只直接转发、不和 OpenAI 格式互转。
+- **网关**：OpenAI 格式的 `/v1/chat/completions`、`/v1/responses`，Anthropic 格式的 `/v1/messages`，以及 `/v1/models`，应用自己选调哪个。model 可以写别名（别名指向某个服务商的某个模型，换服务商不用改应用），也可以不配别名、直接写“服务商标识/模型名”（如 `minimax/MiniMax-M2`）。服务商按协议配地址，不区分服务商：OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 可以原生支持、由网关转换（Chat ↔ Responses，流式照常）或不提供；Anthropic 兼容地址选填，填了就提供 `/v1/messages`，只直接转发、不和 OpenAI 格式互转。
 - **鉴权和额度**：令牌归属应用，每台设备或服务实例一个（只存哈希），可设过期时间和 IP 白名单，能用所属应用的全部别名；额度只设在应用上，所有令牌共用，可按月重置。
 - **记账**：每个请求记一条用量（只记元数据，不记内容）；服务商没返回 usage 时按字符数估算并标出来。
 - **管理后台**：账号密码 + Passkey 登录；服务商、应用的管理（别名和令牌在应用里配）；使用日志、数据看板。

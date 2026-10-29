@@ -143,5 +143,8 @@
   "Save the app first, then add keys to it": "Save the app first, then add keys to it",
   "Shared by all keys of this app; 0 means unlimited": "Shared by all keys of this app; 0 means unlimited",
   "A self-hosted LLM gateway for personal apps": "A self-hosted LLM gateway for personal apps",
-  "Licensed under AGPL-3.0-or-later. Source code:": "Licensed under AGPL-3.0-or-later. Source code:"
+  "Licensed under AGPL-3.0-or-later. Source code:": "Licensed under AGPL-3.0-or-later. Source code:",
+  "Provider ID": "Provider ID",
+  "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.": "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.",
+  "Follow system": "Follow system"
 }

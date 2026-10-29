@@ -131,6 +131,14 @@ const MIGRATIONS = [
   // 令牌不再单独设额度和模型白名单：额度只在应用上，令牌能用所属应用的全部别名。
   // 列保留不用（used 仍按令牌累计，看板和日志用得到）
   `UPDATE tokens SET quota = 0, models = '[]';`,
+  // 服务商标识：应用可以不配别名，直接用“标识/模型名”调用（如 minimax/MiniMax-M2）。
+  // 已有服务商先用名称转小写、空格换连字符，重名或为空时加上 id；不合规的在后台编辑时再改
+  `ALTER TABLE upstreams ADD COLUMN slug TEXT NOT NULL DEFAULT '';
+  UPDATE upstreams SET slug = lower(replace(trim(name), ' ', '-'));
+  UPDATE upstreams SET slug = 'provider-' || id WHERE slug = '' OR instr(slug, '/') > 0;
+  UPDATE upstreams SET slug = slug || '-' || id
+    WHERE slug IN (SELECT slug FROM upstreams GROUP BY slug HAVING COUNT(*) > 1);
+  CREATE UNIQUE INDEX upstreams_slug ON upstreams(slug);`,
 ]
 
 function open(): DatabaseSync {

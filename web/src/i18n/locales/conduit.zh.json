@@ -143,5 +143,8 @@
   "Save the app first, then add keys to it": "先保存应用，再添加密钥",
   "Shared by all keys of this app; 0 means unlimited": "这个应用的所有密钥共用，0 表示不限",
   "A self-hosted LLM gateway for personal apps": "给个人应用用的自建大模型网关",
-  "Licensed under AGPL-3.0-or-later. Source code:": "以 AGPL-3.0-or-later 许可发布。源码："
+  "Licensed under AGPL-3.0-or-later. Source code:": "以 AGPL-3.0-or-later 许可发布。源码：",
+  "Provider ID": "标识",
+  "Apps can skip aliases and call ID/model directly, e.g. minimax/MiniMax-M2. Apps using the old ID break if you change it.": "应用可以不配别名，直接用“标识/模型名”调用，如 minimax/MiniMax-M2。改了标识，用旧写法的应用会调不通。",
+  "Follow system": "跟随系统"
 }
