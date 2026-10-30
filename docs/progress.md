@@ -15,6 +15,8 @@
 
 - PR leonardo-zhu/conduit#4 已合并（2026-10-29）：上游不区分服务商，按协议配地址。OpenAI 兼容地址必填，Chat Completions 始终提供，Responses API 开关 + 原生 / 转换；Anthropic 兼容地址选填，`/v1/messages` 直接转发、永不和 OpenAI 格式互转。迁移 5、6。**还没用真实的 Anthropic 上游测过。**
 
+- **2026-10-30 OpenClaw 已接入**：应用 OpenClaw 下每个 agent 有一个别名：`openclaw-main`、`openclaw-github-bot`、`openclaw-mail`、`openclaw-jiahong`，再加一个给默认模型用的 `openclaw-default`，这些都指向 `ark-code-latest`；定时任务另用 `openclaw-briefing`（`doubao-seed-2.0-mini`）、`openclaw-rss`（`doubao-seed-2.1-lite`）。以上都在服务商 `ark-agent-plan` 下。OpenClaw 用 `openai-responses` 协议，`baseUrl` 是 `https://conduit.r4s.leonardo-zhu.me/v1`，走的是 Responses 原生转发。带工具调用的多轮对话实测通过，**这是第一次用真实上游验证 Responses 原生模式**。密钥 `openclaw-default` 已重新生成（旧的在对话里泄露过）。详情见 `~/HomeLab/notes/2026-10-30-openclaw-接入-conduit.md`。
+
 ### 2026-10-30 上线后的界面整理（用户在本地和线上走查后逐条定的）
 
 **PR leonardo-zhu/conduit#5 已合并**（分支 `feat/console-cleanup`）：
