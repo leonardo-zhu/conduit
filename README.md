@@ -2,24 +2,24 @@
 
 自托管的多应用 LLM 网关。所有应用（Vita 是第一个，之后的小服务也一样）的模型调用都从这里走：鉴权、额度、模型别名、协议转换、用量记录、管理后台。
 
-2026-10-29 起在 R4S 上运行（`https://conduit.r4s.leonardo-zhu.me`），替换了原来的 NewAPI + adapter。
+2026-10-29 起在 R4S 上运行（`https://conduit.r4s.leonardo-zhu.me`），替换了原来的 NewAPI + adapter。目前接入的是 OpenClaw（2026-10-30，每个 agent 一个别名）；Vita 客户端写好后接入，接入约定见 [docs/apps.md](docs/apps.md)。
 
 ## 功能
 
 - **网关**：OpenAI 格式的 `/v1/chat/completions`、`/v1/responses`，Anthropic 格式的 `/v1/messages`，以及 `/v1/models`，应用自己选调哪个。model 可以写别名（别名指向某个服务商的某个模型，换服务商不用改应用），也可以不配别名、直接写“服务商标识/模型名”（如 `minimax/MiniMax-M2`）。服务商按协议配地址，不区分服务商：OpenAI 兼容地址必填，Chat Completions 一定提供；Responses API 可以原生支持、由网关转换（Chat ↔ Responses，流式照常）或不提供；Anthropic 兼容地址选填，填了就提供 `/v1/messages`，只直接转发、不和 OpenAI 格式互转。
-- **鉴权和额度**：令牌归属应用，每台设备或服务实例一个（只存哈希），可设过期时间和 IP 白名单，能用所属应用的全部别名；额度只设在应用上，所有令牌共用，可按月重置。
+- **鉴权和额度**：API 密钥归属应用，每台设备或服务实例一把（只存哈希），可设过期时间和 IP 白名单，能用所属应用的全部别名；额度（按 token 计）只设在应用上，所有密钥共用，可按月重置。
 - **记账**：每个请求记一条用量（只记元数据，不记内容）；服务商没返回 usage 时按字符数估算并标出来。
-- **管理后台**：账号密码 + Passkey 登录；服务商、应用的管理（别名和令牌在应用里配）；使用日志、数据看板。
+- **管理后台**：账号密码 + Passkey 登录；服务商（可一键测试全部）、应用的管理（别名和 API 密钥在应用里配）；使用日志、数据看板。
 - **事件提醒**：服务商拒绝密钥、限流、连续失败，应用额度将尽 / 用尽，错误率突增。显示在后台顶栏的铃铛里，新事件推送到 Telegram 频道。见 [docs/alerts.md](docs/alerts.md)。
 
 ## 架构
 
 ```
-应用 ──/v1/responses 或 /v1/chat/completions + 令牌──▶ Caddy (conduit.r4s.leonardo-zhu.me)
+应用 ──/v1/responses、/v1/chat/completions、/v1/messages + 密钥──▶ Caddy (conduit.r4s.leonardo-zhu.me)
                                                           │
                                                           ▼
                                     web :3012（Next.js，本仓库 web/）
-                     管理后台 · 令牌 · 额度 · 别名 · 用量 · 协议转换 · SQLite
+                     管理后台 · 密钥 · 额度 · 别名 · 用量 · 协议转换 · SQLite
                                   │
                     /v1/chat/completions → OpenAI 兼容地址/chat/completions（直接转发）
                     /v1/responses        → 原生：OpenAI 兼容地址/responses（直接转发）
@@ -33,7 +33,9 @@
 网关发现异常 ──▶ 事件表（后台铃铛） ──新事件──▶ Telegram 频道
 ```
 
-一个服务、一个 SQLite 库。上游密钥用主密钥加密后存库，令牌只存哈希。
+一个服务、一个 SQLite 库。服务商密钥用主密钥加密后存库，API 密钥只存哈希。
+
+还没做的（Vita 分发前才需要）：备用服务商链和熔断、RPM / TPM 限流、价格表和预算金额、设备注册。和 Vita 设计文档的逐条对照见 Vita 仓库的 `docs/architecture/llm-gateway-project.md`，进度见 [docs/progress.md](docs/progress.md)。
 
 ## 目录
 
@@ -48,7 +50,7 @@ web/                  管理后台 + 网关（前端取自 NewAPI，AGPL-3.0，�
   src/server/gateway/ 网关数据面：鉴权、别名、额度、转发、协议转换、记账
   scripts/            冒烟测试、本地示例数据、NewAPI 令牌导入
 docs/
-  setup.md            部署
+  setup.md            部署、服务器上的配置、回滚
   alerts.md           事件提醒和 Telegram 推送
   apps.md             新应用接入约定
   rewrite-plan.md     从 NewAPI + adapter 重构为本服务的计划

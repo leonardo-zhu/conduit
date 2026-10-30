@@ -21,52 +21,18 @@ GitHub Actions（`.github/workflows/deploy.yml`）：
 
 `compose.yaml` 以仓库为准，服务器上的副本每次部署都会被覆盖；`.env` 只在服务器上维护，不进仓库。只改了文档的提交不会触发部署。
 
-runner、部署目录（`/opt/stacks/conduit`，组 32772 可写）在 2026-10-26 部署 NewAPI 时已经准备好，不用再做。
+runner（`r4s-conduit`）和部署目录（`/opt/stacks/conduit`，组 32772 可写）在 2026-10-26 部署 NewAPI 时准备好的。
 
-## 从 NewAPI 切换过来（只做一次）
+## 服务器上的配置
 
-以下在 R4S 上执行（`ssh istoreos`）。合并到 master 之前做完第 1–3 步。
+2026-10-29 已从 NewAPI 切换过来，以下都已就绪，重建服务器时照着补：
 
-1. **补齐 `.env`**。在自己电脑上进入仓库的 `web/` 目录生成密钥：
-
-   ```bash
-   node scripts/hash-password.mjs   # ADMIN_PASSWORD_HASH，密码至少 12 位
-   openssl rand -base64 32          # CONDUIT_MASTER_KEY
-   ```
-
-   然后按仓库根目录的 `.env.example` 编辑 `/opt/stacks/conduit/.env`：加上 `ADMIN_USERNAME`、`ADMIN_PASSWORD_HASH`、`CONDUIT_MASTER_KEY`、`PASSKEY_ORIGIN`；原来的 `SESSION_SECRET` 可以保留（至少 32 个字符），`CRYPTO_SECRET` 等 NewAPI 的配置可以删掉。值里不能有 `$`。
-
-   网关事件的 Telegram 推送不用在这里配机器人令牌：`compose.yaml` 会加载 `/opt/stacks/.secrets/global.env`，用里面 OpenClaw 默认机器人的 `TELEGRAM_BOT_TOKEN_DEFAULT`；`.env` 里只用 `CONDUIT_TELEGRAM_CHAT_ID` 指定发到哪个频道，见 [alerts.md](alerts.md)。
-
-2. **数据目录**（容器里以 node 用户运行，uid 1000）：
-
-   ```bash
-   mkdir -p /opt/conduit/web/data && chown 1000:1000 /opt/conduit/web/data
-   ```
-
-3. **Caddy**：把 `/opt/stacks/caddy/Caddyfile` 里 `conduit.r4s.leonardo-zhu.me` 那一段换成 `deploy/Caddyfile.snippet` 的内容（指向 3012，去掉原来的 `/_home`），然后：
-
-   ```bash
-   cd /opt/stacks/caddy
-   docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-   docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
-   ```
-
-   在新服务起来之前，这个域名会返回 502。
-
-4. **部署**：把分支合并到 `master` 并推送。部署时 `--remove-orphans` 会删掉旧的 `conduit-new-api` 和 `conduit-adapter` 容器。
-
-5. **配置**：打开 `https://conduit.r4s.leonardo-zhu.me`，用 `.env` 里的账号登录。在头像菜单里注册 Passkey（可选），然后建服务商（填真实密钥和 OpenAI 兼容地址；Responses API 选原生支持、网关转换或不提供；有 Anthropic 接口就再填 Anthropic 兼容地址），再建应用，在应用抽屉里配别名和 API 密钥。
-
-6. **（可选）导入 NewAPI 的令牌**：想沿用 NewAPI 里发过的令牌时才需要。NewAPI 的数据还在 `/opt/conduit/new-api/data`，先预览，确认后加 `--apply`：
-
-   ```bash
-   cd /opt/stacks/conduit
-   docker compose run --rm -v /opt/conduit/new-api/data:/newapi:ro web \
-     node scripts/import-newapi.mjs /newapi/one-api.db --map root=vita
-   ```
-
-7. 确认没问题后，`/opt/conduit/new-api/` 可以删掉。
+- `/opt/stacks/conduit/.env`：按仓库根目录的 `.env.example` 填 `ADMIN_USERNAME`、`ADMIN_PASSWORD_HASH`（`node web/scripts/hash-password.mjs` 生成，密码至少 12 位）、`SESSION_SECRET`（至少 32 个字符）、`CONDUIT_MASTER_KEY`（`openssl rand -base64 32`，**丢了要在后台重填所有服务商密钥**）、`PASSKEY_ORIGIN`、`CONDUIT_TELEGRAM_CHAT_ID`。值里不能有 `$`。
+- Telegram 推送的机器人令牌不在 `.env` 里：`compose.yaml` 加载 `/opt/stacks/.secrets/global.env`，用 OpenClaw 默认机器人的 `TELEGRAM_BOT_TOKEN_DEFAULT`，见 [alerts.md](alerts.md)。
+- 数据目录：`mkdir -p /opt/conduit/web/data && chown 1000:1000 /opt/conduit/web/data`（容器里以 node 用户运行）。
+- Caddy：`/opt/stacks/caddy/Caddyfile` 里 `conduit.r4s.leonardo-zhu.me` 一段用 `deploy/Caddyfile.snippet` 的内容。改完先 `caddy validate` 再 `caddy reload`（在 `/opt/stacks/caddy` 里用 `docker compose exec -T caddy caddy <validate|reload> --config /etc/caddy/Caddyfile --adapter caddyfile`）。
+- 首次登录后在头像菜单里注册 Passkey，再建服务商、应用、别名和密钥。
+- `web/scripts/import-newapi.mjs` 可以导入 NewAPI 的令牌（切换时没用上）。NewAPI 的旧数据还在 `/opt/conduit/new-api/`，对账确认不回退后删掉。
 
 ## 更新与回滚
 
