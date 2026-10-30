@@ -30,6 +30,8 @@ export const usageLogSchema = z.object({
   type: z.number(),
   content: z.string(),
   username: z.string().default(''),
+  // Conduit: 应用名称（username 是应用标识）
+  app_name: z.string().default(''),
   token_name: z.string().default(''),
   model_name: z.string().default(''),
   quota: z.number().default(0),

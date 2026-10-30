@@ -349,6 +349,8 @@ export function useCommonLogsColumns(
             const log = row.original
 
             if (!log.username) return null
+            // 显示应用名称，按标识筛选
+            const appName = log.app_name || log.username
 
             return (
               <button
@@ -373,7 +375,7 @@ export function useCommonLogsColumns(
                     }
                   >
                     {sensitiveVisible
-                      ? getUserAvatarFallback(log.username)
+                      ? getUserAvatarFallback(appName)
                       : '•'}
                   </AvatarFallback>
                 </Avatar>
@@ -384,10 +386,10 @@ export function useCommonLogsColumns(
                         <span className='text-muted-foreground max-w-[100px] truncate text-sm hover:underline' />
                       }
                     >
-                      {sensitiveVisible ? log.username : '••••'}
+                      {sensitiveVisible ? appName : '••••'}
                     </TooltipTrigger>
-                    {sensitiveVisible && log.username.length > 12 && (
-                      <TooltipContent side='top'>{log.username}</TooltipContent>
+                    {sensitiveVisible && appName.length > 12 && (
+                      <TooltipContent side='top'>{appName}</TooltipContent>
                     )}
                   </Tooltip>
                 </TooltipProvider>

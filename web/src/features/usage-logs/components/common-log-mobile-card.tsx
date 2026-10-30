@@ -96,7 +96,7 @@ export function CommonLogMobileCard<TData>(props: {
     },
     user: {
       label: t('App'),
-      value: log.username,
+      value: log.app_name || log.username,
       visible: props.cells.has('user') && !!log.username,
       sensitive: true,
     },
@@ -256,7 +256,7 @@ export function CommonLogMobileCard<TData>(props: {
                         }
                       >
                         {context.sensitiveVisible
-                          ? getUserAvatarFallback(log.username)
+                          ? getUserAvatarFallback(log.app_name || log.username)
                           : '•'}
                       </AvatarFallback>
                     </Avatar>
