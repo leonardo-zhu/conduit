@@ -1,6 +1,6 @@
 # 自建网关进度记录
 
-最后更新：2026-10-30（上线后的界面整理：PR #5、#6、#7 都已合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
+最后更新：2026-10-30（界面整理 #5–#7 已合并；OpenClaw 接入；#9 日志显示应用名称待合并）。方向、需求和阶段划分见 [rewrite-plan.md](rewrite-plan.md)，这里只记做到哪了、下次从哪接着做。
 
 ## 当前状态（2026-10-30）
 
@@ -44,10 +44,10 @@
 
 ### 下次先做
 
-1. 确认 #7 部署成功（CI 跑完、`docker compose ps`、登录页 200、新 logo 和标签图标）。提醒用户在后台把迁移 8 自动生成的服务商标识改短（如 `ark-agent-plan` → `ark`），趁还没有应用用 `标识/模型名`。
-2. 用真实上游测：OpenAI 兼容地址下 Responses 原生 / 转换两种、流式（`"stream": true`）；`标识/模型名` 直接调用；Anthropic 兼容地址（如 MiniMax `https://api.minimaxi.com/anthropic`、方舟 Coding Plan `…/api/coding`）用 Claude Code 试一次（`ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。
-3. 用户在线上测试、切 Vita（代码里写别名，如 `vita-chat`），按用户指出的具体问题修 bug，**不要逐页巡检**。
-4. 对照上游控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
+1. 合并 #8（本文件等文档）和 #9（使用日志显示应用名称）。#7 已部署，线上正常（OpenClaw 接入时用过）。
+2. 用真实上游把没测过的路径各跑一次：Responses **网关转换**（只支持 Chat 的上游，如 Nous）、`标识/模型名` 直接调用、Anthropic `/v1/messages`（如 MiniMax `https://api.minimaxi.com/anthropic`，用 Claude Code 设 `ANTHROPIC_BASE_URL=https://conduit.r4s.leonardo-zhu.me`）。Responses **原生**、流式和工具调用已经由 OpenClaw 验证过（方舟 Agent Plan）。服务商标识 `ark-agent-plan` 想改短就趁现在，目前没有调用方用 `标识/模型名`（别名不受影响）。
+3. Vita 接入：Vita 客户端的 `LLMClient` 还没写（Vita `docs/implementation-plan.md` 里接 Conduit 那一步），写的时候在应用 Vita 下配 `vita-chat` 等别名，每台设备一把密钥。按用户指出的具体问题修 bug，**不要逐页巡检**。
+4. 对照方舟控制台对账；确认不回退后清理 NewAPI 留下的 `/opt/conduit/new-api/` 和 `.env` 里的 `CRYPTO_SECRET`。
 
 ### 其他待处理
 
@@ -55,7 +55,8 @@
 - **agent-skills 的 Deploy Skills 工作流一直失败**：部署目标是已经撤掉的 do-sg（`DEPLOY_SSH_HOST` 解析不了）。合并 skill 的 PR 后要在本机手动 `TARGET_HOME=$HOME ~/Agent/Skills/install.sh`；R4S 上 OpenClaw 的 skill 目前没人更新。要不要把工作流改成部署到 R4S，等用户定。
 - 本机 `web/.env.local` 里复制了一份 OpenClaw 默认机器人的令牌做测试（用户同意的），推送目标是 Daily Briefing 频道。
 - `git stash` 里留着一条已被 PR #4 取代的提示文字修改（`stash@{0}`），可以删。
-- 可能要做（用户没要求，提过）：应用“手动清零已用量”按钮；按月重置的时间按服务器时区（容器多半是 UTC），要不要固定成北京时间；新建密钥默认过期改 30 天；使用日志、看板、提醒里显示应用名称而不是标识（日志存的是标识，要查表转换）；日志不会自动清理。
+- **改线上数据走管理接口**：2026-10-30 接 OpenClaw 时直接写了 SQLite（建别名、换密钥），用户指出以后应走接口。走接口又不想让密钥明文进对话，可以在 R4S 本机调接口；现在缺一个能在服务器上登录后台的方式（如只认 127.0.0.1 的管理令牌），要做再说。
+- 可能要做（用户没要求，提过）：应用“手动清零已用量”按钮；按月重置的时间按服务器时区（容器多半是 UTC），要不要固定成北京时间；新建密钥默认过期改 30 天；看板、提醒里显示应用名称而不是标识（使用日志已在 #9 改）；按密钥的别名列表和“禁止 `标识/模型名` 直接调用”开关（讨论过，等 Vita 要在客户端放密钥时一起做，只做前者会被直接调用绕过）；日志不会自动清理。
 
 ## 已完成
 
@@ -165,6 +166,7 @@
 ### 阶段 4–5
 
 - 切换 Vita 到 Conduit，并对账（见上“下次先做”）。
+- Vita 设计文档里分发前才需要的：设备注册（App Attest）、RPM / TPM 限流、价格表和预算金额、备用上游链和熔断、内容日志开关。对照表见 Vita `docs/architecture/llm-gateway-project.md` 的“实现现状”。
 
 ## 本地开发
 
