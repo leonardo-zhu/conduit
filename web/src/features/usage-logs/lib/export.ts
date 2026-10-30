@@ -76,7 +76,7 @@ export function getLogCsvRow(
   return [
     formatTimestampToDate(log.created_at),
     t(getLogTypeConfig(log.type).label),
-    ...(isAdmin ? [log.username ?? ''] : []),
+    ...(isAdmin ? [log.app_name || log.username || ''] : []),
     logTokenName(log, t),
     log.group ?? '',
     log.model_name ?? '',

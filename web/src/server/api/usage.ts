@@ -1,6 +1,6 @@
 /**
  * 用量记录的查询：使用日志（/api/log）和数据看板（/api/data）。按 NewAPI 的格式返回：
- * 日志的 username 是应用标识，model_name 是别名，channel 是上游。
+ * 日志的 username 是应用标识（app_name 是应用名称，界面上显示它），model_name 是别名，channel 是上游。
  *
  * 记录由网关在每个请求结束时写入（阶段 3），这里只读。
  */
@@ -40,7 +40,7 @@ const LOG_TYPE = { CONSUME: 2, ERROR: 5 } as const
  */
 const CHARGED = "(error = '' OR input_tokens + output_tokens > 0)"
 
-function toLog(row: UsageRow) {
+function toLog(row: UsageRow, appNames: Map<number, string>) {
   const failed = row.error !== '' && row.input_tokens + row.output_tokens === 0
   return {
     id: row.id,
@@ -49,6 +49,8 @@ function toLog(row: UsageRow) {
     type: failed ? LOG_TYPE.ERROR : LOG_TYPE.CONSUME,
     content: row.error,
     username: row.app_slug,
+    // 应用已删除时没有名称，界面退回显示标识
+    app_name: (row.app_id !== null && appNames.get(row.app_id)) || row.app_slug,
     token_name: row.token_name,
     token_id: row.token_id ?? 0,
     model_name: row.alias,
@@ -114,7 +116,10 @@ route('GET', '/api/log', ({ query }) => {
   const rows = db()
     .prepare(`SELECT * FROM usage_logs ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
     .all(...args, size, offset) as unknown as UsageRow[]
-  return ok({ items: rows.map(toLog), total, page, page_size: size })
+  const appNames = new Map(
+    (db().prepare('SELECT id, name FROM apps').all() as { id: number; name: string }[]).map((a) => [a.id, a.name])
+  )
+  return ok({ items: rows.map((row) => toLog(row, appNames)), total, page, page_size: size })
 })
 
 route('GET', '/api/log/stat', ({ query }) => {
