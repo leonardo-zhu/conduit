@@ -32,8 +32,17 @@ const globalRef = globalThis as typeof globalThis & {
 const failStreak = (globalRef.__conduitFailStreak ??= new Map())
 const errorRateChecked = (globalRef.__conduitErrorRateChecked ??= new Map())
 
-const logsLink = (params: Record<string, string | number>) =>
-  `/usage-logs/common?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}`
+/**
+ * 跳到日志页：只看错误，从一小时前开始（Telegram 推送用；后台铃铛点击时会按事件的首次 / 最近时间重算范围）。
+ * 参数按 src/lib/router.tsx 的规则编码：值一律 JSON 编码，读回来类型才对（channel 要是字符串 "1"，不能是数字 1）。
+ */
+const logsLink = (params: Record<string, string>) => {
+  const search = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) search.set(k, JSON.stringify(v))
+  search.set('type', JSON.stringify(['5']))
+  search.set('startTime', String(Date.now() - 3600_000))
+  return `/usage-logs/common?${search}`
+}
 
 const formatTokens = (n: number) => n.toLocaleString('en-US')
 const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`
@@ -90,7 +99,7 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
       level: 'warning',
       title: `服务商 ${upstream.name} 限流（429）`,
       detail: error.slice(0, 500),
-      link: logsLink({ channel: upstream.id }),
+      link: logsLink({ channel: String(upstream.id) }),
       fields: [['服务商', upstream.name], ['状态码', '429'], trigger],
       raw: upstreamBody(error),
     })
@@ -106,7 +115,7 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
         level: 'error',
         title: `服务商 ${upstream.name} 连续 ${streak} 次失败`,
         detail: `最近一次：${error}`.slice(0, 500),
-        link: logsLink({ channel: upstream.id }),
+        link: logsLink({ channel: String(upstream.id) }),
         fields: [['服务商', upstream.name], ['连续失败', `${streak} 次`], ['状态码', String(statusCode)], trigger],
         raw: upstreamBody(error),
       })

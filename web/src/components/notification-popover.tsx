@@ -115,6 +115,34 @@ function getRelativeTime(publishDate: string | Date, t: TFunction): string {
   return formatDateTimeObject(pubDate)
 }
 
+/**
+ * 跳日志页的事件：只看错误，时间范围覆盖事件从首次到最近一次出现（默认范围只有今天，昨天的事件会找不到）。
+ * 链接里的 channel / username 统一按字符串读：老事件的链接写的是 channel=1，路由会解析成数字、被日志页的校验丢掉。
+ */
+function logsSearchForEvent(event: GatewayEvent) {
+  const url = new URL(event.link, 'http://x')
+  if (!url.pathname.startsWith('/usage-logs')) return null
+  const raw = (key: string) => {
+    const value = url.searchParams.get(key)
+    if (!value) return undefined
+    try {
+      return String(JSON.parse(value))
+    } catch {
+      return value
+    }
+  }
+  return {
+    path: url.pathname,
+    search: {
+      channel: raw('channel'),
+      username: raw('username'),
+      type: ['5'],
+      startTime: event.first_at * 1000 - 10 * 60_000,
+      endTime: event.last_at * 1000 + 60_000,
+    },
+  }
+}
+
 function EventItem({
   event,
   onSelect,
@@ -187,7 +215,10 @@ export function NotificationPopover({
   const handleSelect = (event: GatewayEvent) => {
     if (event.read_at === 0) onMarkRead(event.id)
     onOpenChange(false)
-    if (event.link) navigate({ href: event.link })
+    if (!event.link) return
+    const logs = logsSearchForEvent(event)
+    if (logs) navigate({ to: logs.path, search: logs.search })
+    else navigate({ href: event.link })
   }
 
   return (
