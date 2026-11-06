@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   Radio,
   AppWindow,
+  History,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -77,6 +78,12 @@ export function useSidebarData(): SidebarData {
             title: t('Apps'),
             url: '/apps',
             icon: AppWindow,
+          },
+          {
+            // Conduit: 后台改配置的记录（别名指向、额度、密钥等）
+            title: t('Change history'),
+            url: '/changes',
+            icon: History,
           },
         ],
       },

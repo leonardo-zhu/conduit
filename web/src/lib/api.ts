@@ -113,6 +113,47 @@ export async function markAllEventsRead() {
   return requireServerSuccess(res.data)
 }
 
+// Conduit: 配置变更记录（后台对应用、别名、密钥、服务商、Passkey 的增删改）
+export interface FieldChange {
+  label: string
+  from?: string
+  to?: string
+  /** from / to 是 unix 秒，-1 表示永不 */
+  time?: true
+}
+
+export interface ConfigChange {
+  id: number
+  at: number
+  actor: string
+  ip: string
+  subject_type: 'app' | 'alias' | 'token' | 'upstream' | 'passkey'
+  subject_id: string
+  subject_name: string
+  action:
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'enable'
+    | 'disable'
+    | 'regenerate_key'
+    | 'copy'
+  changes: FieldChange[]
+}
+
+export async function getConfigChanges(params: {
+  p: number
+  page_size: number
+  subject_type?: string
+  keyword?: string
+}) {
+  const res = await api.get('/api/changes', { params })
+  return requireServerSuccess(res.data)?.data as {
+    items: ConfigChange[]
+    total: number
+  }
+}
+
 // ============================================================================
 // 2FA Management APIs
 // ============================================================================
