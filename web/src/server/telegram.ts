@@ -10,6 +10,8 @@
  * 连不上 api.telegram.org 时，可以用 CONDUIT_TELEGRAM_API 换成反代地址，
  * 或者设 NODE_USE_ENV_PROXY=1 加 HTTPS_PROXY 走代理（Node 24 起支持）。
  */
+import { describeProviderError } from '@/lib/provider-error'
+
 import type { EventInput, EventKind } from './events'
 
 const SEND_TIMEOUT_MS = 10_000
@@ -33,15 +35,14 @@ const RAW_LIMIT = 800
 
 const escapeHtml = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** 上游原始响应：是 JSON 就缩进排版，太长截断 */
-function formatRaw(raw: string): string {
-  let text = raw.trim()
-  try {
-    text = JSON.stringify(JSON.parse(text), null, 2)
-  } catch {
-    // 不是 JSON，原样
+/** 服务商原始响应：完整 JSON 缩进排版放代码块；截断的 JSON 抠出 code / type / message 逐行列出；都不是就原样放代码块 */
+function rawLines(raw: string): string[] {
+  const clip = (text: string) => (text.length > RAW_LIMIT ? `${text.slice(0, RAW_LIMIT)}\n…` : text)
+  const described = describeProviderError(raw)
+  if (described.kind === 'fields') {
+    return described.fields.map(([label, value]) => `<b>${escapeHtml(label)}</b>：${escapeHtml(clip(value))}`)
   }
-  return text.length > RAW_LIMIT ? `${text.slice(0, RAW_LIMIT)}\n…` : text
+  return [`<pre>${escapeHtml(clip(described.text))}</pre>`]
 }
 
 /**
@@ -66,7 +67,7 @@ export function messageFor(event: EventInput): string {
     if (event.detail) lines.push(escapeHtml(event.detail))
   }
   if (event.raw?.trim()) {
-    lines.push('', '<b>服务商返回</b>', `<pre>${escapeHtml(formatRaw(event.raw))}</pre>`)
+    lines.push('', '<b>服务商返回</b>', ...rawLines(event.raw))
   }
   // PASSKEY_ORIGIN 就是后台地址，生产环境必填
   const origin = process.env.PASSKEY_ORIGIN?.replace(/\/+$/, '')
