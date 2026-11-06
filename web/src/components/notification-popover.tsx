@@ -143,6 +143,37 @@ function logsSearchForEvent(event: GatewayEvent) {
   }
 }
 
+/** 细节末尾是服务商返回的 JSON 时（如“最近一次：服务商返回 500：{...}”），前缀照常显示，JSON 缩进排版 */
+function EventDetail({ detail }: { detail: string }) {
+  const start = detail.indexOf('{')
+  let json: string | null = null
+  if (start >= 0) {
+    try {
+      json = JSON.stringify(JSON.parse(detail.slice(start)), null, 2)
+    } catch {
+      // 不是 JSON，或者被截断了
+    }
+  }
+  if (json === null) {
+    return (
+      <div className='text-muted-foreground line-clamp-2 text-xs break-all'>
+        {detail}
+      </div>
+    )
+  }
+  const prefix = detail.slice(0, start).trim()
+  return (
+    <div className='flex min-w-0 flex-col gap-1'>
+      {prefix ? (
+        <div className='text-muted-foreground text-xs break-all'>{prefix}</div>
+      ) : null}
+      <pre className='bg-muted text-muted-foreground max-h-40 overflow-hidden rounded px-2 py-1.5 font-mono text-[11px] leading-snug break-all whitespace-pre-wrap'>
+        {json}
+      </pre>
+    </div>
+  )
+}
+
 function EventItem({
   event,
   onSelect,
@@ -177,11 +208,7 @@ function EventItem({
         >
           {event.title}
         </div>
-        {event.detail ? (
-          <div className='text-muted-foreground line-clamp-2 text-xs break-all'>
-            {event.detail}
-          </div>
-        ) : null}
+        {event.detail ? <EventDetail detail={event.detail} /> : null}
         <div
           className='text-muted-foreground text-xs'
           title={formatDateTimeObject(lastAt)}

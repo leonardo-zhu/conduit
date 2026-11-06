@@ -47,8 +47,8 @@ const logsLink = (params: Record<string, string>) => {
 const formatTokens = (n: number) => n.toLocaleString('en-US')
 const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`
 
-/** handler.ts 记的上游错误是“上游返回 401：<响应正文>”，推送时只要正文 */
-const upstreamBody = (error: string) => error.replace(/^上游返回 \d+：/, '').slice(0, 500)
+/** handler.ts 记的错误是“服务商返回 401：<响应正文>”（改名前是“上游返回”），推送时只要正文，正文是 JSON 才能排版 */
+const upstreamBody = (error: string) => error.replace(/^(?:上游|服务商)返回 \d+：/, '').slice(0, 500)
 
 export interface RequestOutcome {
   auth: GatewayAuth
