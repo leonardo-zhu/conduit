@@ -50,6 +50,7 @@ import {
   Info,
   LogIn,
 } from 'lucide-react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
@@ -59,6 +60,7 @@ import { Label } from '@/components/ui/label'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { translateServerText } from '@/lib/server-error-message'
+import { describeProviderError } from '@/lib/provider-error'
 import { cn } from '@/lib/utils'
 
 import type { UsageLog } from '../../data/schema'
@@ -1070,14 +1072,50 @@ export function DetailsDialog(props: DetailsDialogProps) {
                   <Copy className='size-3' />
                 )}
               </Button>
-              <p className='min-w-0 pr-6 text-xs leading-relaxed break-all whitespace-pre-wrap sm:wrap-break-word'>
-                {details}
-              </p>
+              <LogContent text={details} />
             </div>
           </div>
         )}
       </div>
     </Dialog>
+  )
+}
+
+/**
+ * Conduit: 错误日志的内容多是“服务商返回 500：{...}”。前缀照常显示，JSON 缩进排版；
+ * 正文被截断（网关只存前 300 字）解析不了时，抠出 code / type / message 逐行列出
+ */
+function LogContent({ text }: { text: string }) {
+  const start = text.indexOf('{')
+  const described = start >= 0 ? describeProviderError(text.slice(start)) : null
+  if (!described || described.kind === 'text') {
+    return (
+      <p className='min-w-0 pr-6 text-xs leading-relaxed break-all whitespace-pre-wrap sm:wrap-break-word'>
+        {text}
+      </p>
+    )
+  }
+  const prefix = text.slice(0, start).trim()
+  return (
+    <div className='flex min-w-0 flex-col gap-1.5 pr-6'>
+      {prefix ? (
+        <p className='text-xs leading-relaxed break-all'>{prefix}</p>
+      ) : null}
+      {described.kind === 'json' ? (
+        <pre className='font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap'>
+          {described.text}
+        </pre>
+      ) : (
+        <dl className='grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs leading-relaxed'>
+          {described.fields.map(([label, value]) => (
+            <Fragment key={label}>
+              <dt className='text-muted-foreground font-mono'>{label}</dt>
+              <dd className='break-all'>{value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
+    </div>
   )
 }
 
