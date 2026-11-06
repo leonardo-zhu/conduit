@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import type { TFunction } from 'i18next'
 import { Bell, CircleAlert, TriangleAlert } from 'lucide-react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import type { GatewayEvent } from '@/lib/api'
+import { describeProviderError } from '@/lib/provider-error'
 import { useNavigate } from '@/lib/router'
 import { formatDateTimeObject } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -143,18 +145,14 @@ function logsSearchForEvent(event: GatewayEvent) {
   }
 }
 
-/** 细节末尾是服务商返回的 JSON 时（如“最近一次：服务商返回 500：{...}”），前缀照常显示，JSON 缩进排版 */
+/**
+ * 细节末尾是服务商返回的 JSON 时（如“最近一次：服务商返回 500：{...}”），前缀照常显示；
+ * 完整 JSON 缩进排版，被截断的抠出 code / type / message 逐行列出
+ */
 function EventDetail({ detail }: { detail: string }) {
   const start = detail.indexOf('{')
-  let json: string | null = null
-  if (start >= 0) {
-    try {
-      json = JSON.stringify(JSON.parse(detail.slice(start)), null, 2)
-    } catch {
-      // 不是 JSON，或者被截断了
-    }
-  }
-  if (json === null) {
+  const described = start >= 0 ? describeProviderError(detail.slice(start)) : null
+  if (!described || described.kind === 'text') {
     return (
       <div className='text-muted-foreground line-clamp-2 text-xs break-all'>
         {detail}
@@ -167,9 +165,20 @@ function EventDetail({ detail }: { detail: string }) {
       {prefix ? (
         <div className='text-muted-foreground text-xs break-all'>{prefix}</div>
       ) : null}
-      <pre className='bg-muted text-muted-foreground max-h-40 overflow-hidden rounded px-2 py-1.5 font-mono text-[11px] leading-snug break-all whitespace-pre-wrap'>
-        {json}
-      </pre>
+      {described.kind === 'json' ? (
+        <pre className='bg-muted text-muted-foreground max-h-40 overflow-hidden rounded px-2 py-1.5 font-mono text-[11px] leading-snug break-all whitespace-pre-wrap'>
+          {described.text}
+        </pre>
+      ) : (
+        <dl className='bg-muted text-muted-foreground grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded px-2 py-1.5 text-[11px] leading-snug'>
+          {described.fields.map(([label, value]) => (
+            <Fragment key={label}>
+              <dt className='font-mono'>{label}</dt>
+              <dd className='line-clamp-3 break-all'>{value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
     </div>
   )
 }
