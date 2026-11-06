@@ -139,6 +139,20 @@ const MIGRATIONS = [
   UPDATE upstreams SET slug = slug || '-' || id
     WHERE slug IN (SELECT slug FROM upstreams GROUP BY slug HAVING COUNT(*) > 1);
   CREATE UNIQUE INDEX upstreams_slug ON upstreams(slug);`,
+  // 配置变更记录：后台对应用、别名、密钥、服务商、Passkey 的增删改，见 changes.ts。不加外键，对象删掉后记录保留
+  `CREATE TABLE config_changes (
+    id            INTEGER PRIMARY KEY,
+    at            INTEGER NOT NULL,          -- unix 秒
+    actor         TEXT NOT NULL DEFAULT '',  -- 登录方式：password / passkey
+    ip            TEXT NOT NULL DEFAULT '',
+    subject_type  TEXT NOT NULL,             -- app / alias / token / upstream / passkey
+    subject_id    TEXT NOT NULL,             -- 别名记的是所属应用的 id；Passkey 的 id 是字符串
+    subject_name  TEXT NOT NULL,
+    action        TEXT NOT NULL,             -- create / update / delete / enable / disable / regenerate_key / copy
+    changes       TEXT NOT NULL DEFAULT '[]' -- JSON：[{ label, from?, to?, time? }]
+  );
+  CREATE INDEX config_changes_at ON config_changes(at);
+  CREATE INDEX config_changes_subject ON config_changes(subject_type, subject_id, at);`,
 ]
 
 function open(): DatabaseSync {

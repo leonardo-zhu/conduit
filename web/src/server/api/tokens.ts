@@ -5,6 +5,7 @@
  * 库里只存密钥的哈希，明文只在创建和重新生成时返回一次。
  * 令牌没有自己的额度和模型白名单：额度只在应用上，令牌能用所属应用的全部别名。used 只用来统计。
  */
+import { diffFields, recordChange, type FieldSpec } from '../changes'
 import { generateTokenKey, hashTokenKey } from '../crypto'
 import { db, nowSeconds, transaction } from '../db'
 import { fail, ok, pageParams } from '../router'
@@ -57,6 +58,19 @@ function toToken(row: TokenRow & { app_slug?: string }) {
 }
 
 const SELECT_WITH_APP = 'SELECT t.*, a.slug AS app_slug FROM tokens t JOIN apps a ON a.id = t.app_id'
+
+const TOKEN_FIELDS: Record<string, FieldSpec> = {
+  name: { label: '名称' },
+  expires_at: { label: '过期时间', time: true },
+  allow_ips: { label: 'IP 白名单' },
+}
+
+/** 变更记录里密钥显示为“应用标识 · 密钥名” */
+const tokenLabel = (row: { app_slug: string; name: string }) => `${row.app_slug} · ${row.name}`
+
+function recordTokenDeleted(row: TokenRow & { app_slug: string }) {
+  recordChange({ subjectType: 'token', subjectId: row.id, subjectName: tokenLabel(row), action: 'delete' })
+}
 
 function getToken(id: number) {
   return db().prepare(`${SELECT_WITH_APP} WHERE t.id = ?`).get(id) as (TokenRow & { app_slug: string }) | undefined
@@ -135,7 +149,15 @@ route('POST', '/api/token', ({ body }) => {
   const result = db()
     .prepare(`INSERT INTO tokens (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
     .run(...Object.values(all))
-  return ok({ ...toToken(getToken(Number(result.lastInsertRowid))!), key })
+  const created = getToken(Number(result.lastInsertRowid))!
+  recordChange({
+    subjectType: 'token',
+    subjectId: created.id,
+    subjectName: tokenLabel(created),
+    action: 'create',
+    changes: [...diffFields(undefined, fields, TOKEN_FIELDS), { label: '密钥', to: `…${created.key_last4}` }],
+  })
+  return ok({ ...toToken(created), key })
 })
 
 route('PUT', '/api/token', ({ body, query }) => {
@@ -146,6 +168,14 @@ route('PUT', '/api/token', ({ body, query }) => {
   if (query.get('status_only')) {
     const status = Number(input.status) === TOKEN_STATUS.ENABLED ? TOKEN_STATUS.ENABLED : TOKEN_STATUS.DISABLED
     db().prepare('UPDATE tokens SET status = ? WHERE id = ?').run(status, row.id)
+    if (status !== row.status) {
+      recordChange({
+        subjectType: 'token',
+        subjectId: row.id,
+        subjectName: tokenLabel(row),
+        action: status === TOKEN_STATUS.ENABLED ? 'enable' : 'disable',
+      })
+    }
     return ok(toToken(getToken(row.id)!))
   }
 
@@ -155,7 +185,15 @@ route('PUT', '/api/token', ({ body, query }) => {
   db()
     .prepare(`UPDATE tokens SET ${entries.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
     .run(...entries.map(([, v]) => v), row.id)
-  return ok(toToken(getToken(row.id)!))
+  const updated = getToken(row.id)!
+  recordChange({
+    subjectType: 'token',
+    subjectId: row.id,
+    subjectName: tokenLabel(updated),
+    action: 'update',
+    changes: diffFields(row as unknown as Record<string, unknown>, fields, TOKEN_FIELDS),
+  })
+  return ok(toToken(updated))
 })
 
 // 重新生成密钥：旧密钥立即失效，新明文只返回这一次
@@ -166,6 +204,13 @@ route('POST', '/api/token/:id/regenerate', ({ params }) => {
   db()
     .prepare('UPDATE tokens SET key_hash = ?, key_prefix = ?, key_last4 = ? WHERE id = ?')
     .run(key_hash, key_prefix, key_last4, row.id)
+  recordChange({
+    subjectType: 'token',
+    subjectId: row.id,
+    subjectName: tokenLabel(row),
+    action: 'regenerate_key',
+    changes: [{ label: '密钥', from: `…${row.key_last4}`, to: `…${key_last4}` }],
+  })
   return ok({ ...toToken(getToken(row.id)!), key })
 })
 
@@ -173,15 +218,23 @@ route('POST', '/api/token/:id/key', () => fail(KEY_NOT_STORED))
 route('POST', '/api/token/batch/keys', () => fail(KEY_NOT_STORED))
 
 route('DELETE', '/api/token/:id', ({ params }) => {
+  const row = getToken(Number(params.id))
   const result = db().prepare('DELETE FROM tokens WHERE id = ?').run(Number(params.id))
-  return result.changes ? ok() : fail('令牌不存在')
+  if (!result.changes || !row) return fail('令牌不存在')
+  recordTokenDeleted(row)
+  return ok()
 })
 
 route('POST', '/api/token/batch', ({ body }) => {
   const ids = (body as { ids?: unknown })?.ids
   if (!Array.isArray(ids)) return fail('参数错误')
   const deleted = transaction(() =>
-    ids.reduce<number>((n, id) => n + Number(db().prepare('DELETE FROM tokens WHERE id = ?').run(Number(id)).changes), 0)
+    ids.reduce<number>((n, id) => {
+      const row = getToken(Number(id))
+      const changes = Number(db().prepare('DELETE FROM tokens WHERE id = ?').run(Number(id)).changes)
+      if (changes && row) recordTokenDeleted(row)
+      return n + changes
+    }, 0)
   )
   return ok(deleted)
 })
