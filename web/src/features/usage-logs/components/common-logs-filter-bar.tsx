@@ -38,7 +38,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { useMediaQuery } from '@/hooks'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
@@ -116,7 +115,6 @@ export function CommonLogsFilterBar<TData>(
   props: CommonLogsFilterBarProps<TData>
 ) {
   const { t } = useTranslation()
-  const isMobile = useMediaQuery('(max-width: 640px)')
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const searchParams = route.useSearch()
@@ -189,14 +187,14 @@ export function CommonLogsFilterBar<TData>(
   )
 
   const handleApply = useCallback(
-    (nextFilters: CommonLogFilters = filters) => {
+    (nextFilters: CommonLogFilters = filters, nextLogType: string = logType) => {
       const filterParams = buildSearchParams(nextFilters, 'common')
       navigate({
         to: '/usage-logs/$section',
         params: { section: 'common' },
         search: {
           ...filterParams,
-          type: [logType],
+          type: [nextLogType],
           page: 1,
         },
       })
@@ -304,9 +302,9 @@ export function CommonLogsFilterBar<TData>(
         onChange={({ start, end }) => {
           handleChange('startTime', start)
           handleChange('endTime', end)
-          if (isMobile) {
-            handleApply({ ...filters, startTime: start, endTime: end })
-          }
+          // Conduit: 桌面端原来只改草稿、要再点“搜索”，选完日期列表没变化，容易以为已经生效；改成和手机端一样立即应用。
+          // 输入框类的筛选（模型、密钥、应用、请求 ID）仍然按回车或点“搜索”
+          handleApply({ ...filters, startTime: start, endTime: end })
         }}
       />
     </LogsFilterField>
@@ -340,6 +338,8 @@ export function CommonLogsFilterBar<TData>(
               logType: nextLogType,
             }
           })
+          // Conduit: 和日期一样选完立即应用；输入框类的筛选仍然按回车或点“搜索”
+          handleApply(filters, nextLogType)
         }}
       >
         <SelectTrigger
