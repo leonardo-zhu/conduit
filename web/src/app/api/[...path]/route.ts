@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import '@/mock/handlers'
 import { match as matchMock } from '@/mock/router'
 import { match as matchReal } from '@/server/api'
-import { readSession } from '@/server/auth'
+import { clientIp, readSession } from '@/server/auth'
+import { runAsActor } from '@/server/changes'
 import { MasterKeyError } from '@/server/crypto'
 import { isApiResult } from '@/server/router'
 
@@ -11,7 +12,8 @@ import { isApiResult } from '@/server/router'
 // 写成具体路由文件的接口（登录、Passkey、status）优先于这里匹配
 async function handle(req: NextRequest) {
   const path = req.nextUrl.pathname.replace(/\/+$/, '')
-  if (!readSession(req)) {
+  const session = readSession(req)
+  if (!session) {
     return NextResponse.json({ success: false, message: '未登录' }, { status: 401 })
   }
   const found = matchReal(req.method, path) ?? matchMock(req.method, path)
@@ -32,14 +34,18 @@ async function handle(req: NextRequest) {
   const cookies = new Map(req.cookies.getAll().map((c) => [c.name, c.value]))
   let result: unknown
   try {
-    result = await found.handler({
-      method: req.method,
-      path,
-      params: found.params,
-      query: req.nextUrl.searchParams,
-      body,
-      cookies,
-    })
+    // 带上登录方式和 IP，接口里写配置变更记录时用（见 server/changes.ts）
+    const actor = { method: session.method ?? 'password', ip: clientIp(req) }
+    result = await runAsActor(actor, () =>
+      found.handler({
+        method: req.method,
+        path,
+        params: found.params,
+        query: req.nextUrl.searchParams,
+        body,
+        cookies,
+      })
+    )
   } catch (error) {
     if (error instanceof MasterKeyError) {
       console.error(`[api] ${error.message}`)

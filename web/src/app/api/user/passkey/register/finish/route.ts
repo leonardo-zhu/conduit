@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 
-import { readSession } from '@/server/auth'
+import { clientIp, readSession } from '@/server/auth'
+import { recordChange, runAsActor } from '@/server/changes'
 import { getPasskey } from '@/server/db'
 import { finishRegistration, publicPasskey } from '@/server/passkey'
 import { passkeyRoute } from '@/server/passkey-route'
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
     }
     const name = (typeof body.name === 'string' ? body.name.trim() : '').slice(0, MAX_NAME_LENGTH)
     const id = await finishRegistration(req, session.sid, body.flow_token, body.credential, name || 'Passkey')
-    return respond({ success: true, data: publicPasskey(getPasskey(id)!) })
+    const passkey = getPasskey(id)!
+    runAsActor({ method: session.method ?? 'password', ip: clientIp(req) }, () =>
+      recordChange({ subjectType: 'passkey', subjectId: id, subjectName: passkey.name, action: 'create' })
+    )
+    return respond({ success: true, data: publicPasskey(passkey) })
   })
 }

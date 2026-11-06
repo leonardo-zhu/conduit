@@ -5,6 +5,7 @@
  *
  * 密钥用 CONDUIT_MASTER_KEY 加密后存库，接口只返回末四位。
  */
+import { diffFields, diffList, fmt, parseList, recordChange, type FieldChange, type FieldSpec } from '../changes'
 import { decryptSecret, encryptSecret } from '../crypto'
 import {
   db,
@@ -205,6 +206,37 @@ function readUpstreamInput(body: unknown, partial: boolean) {
   return { fields }
 }
 
+const UPSTREAM_FIELDS: Record<string, FieldSpec> = {
+  name: { label: '名称' },
+  slug: { label: '标识' },
+  base_url: { label: 'OpenAI 兼容地址' },
+  responses_mode: { label: 'Responses API', format: fmt.responsesMode },
+  anthropic_base_url: { label: 'Anthropic 兼容地址' },
+  test_model: { label: '测试模型' },
+  status: { label: '状态', format: fmt.status },
+  remark: { label: '备注' },
+}
+
+/** 对比表单和改前的服务商；密钥只记后 4 位，模型列表只记增减 */
+function upstreamChanges(before: UpstreamRow | undefined, fields: Record<string, string | number>): FieldChange[] {
+  const changes = diffFields(before as unknown as Record<string, unknown> | undefined, fields, UPSTREAM_FIELDS)
+  if ('models' in fields) changes.push(...diffList('模型列表', parseList(before?.models), parseList(fields.models)))
+  if (fields.key_enc) {
+    changes.push({ label: '密钥', from: before ? `…${before.key_last4}` : undefined, to: `…${fields.key_last4}` })
+  }
+  return changes
+}
+
+function recordUpstreamStatus(row: UpstreamRow, status: number) {
+  if (status === row.status) return
+  recordChange({
+    subjectType: 'upstream',
+    subjectId: row.id,
+    subjectName: row.name,
+    action: status === UPSTREAM_STATUS.ENABLED ? 'enable' : 'disable',
+  })
+}
+
 function insertUpstream(fields: Record<string, string | number>): number {
   const columns = Object.keys(fields)
   const result = db()
@@ -225,11 +257,18 @@ function updateUpstream(id: number, fields: Record<string, string | number>) {
 
 function deleteUpstreams(ids: number[]): { deleted: number } | { error: string } {
   try {
-    return transaction(() => {
-      let deleted = 0
-      for (const id of ids) deleted += Number(db().prepare('DELETE FROM upstreams WHERE id = ?').run(id).changes)
-      return { deleted }
+    const removed = transaction(() => {
+      const rows: UpstreamRow[] = []
+      for (const id of ids) {
+        const row = getUpstream(id)
+        if (row && db().prepare('DELETE FROM upstreams WHERE id = ?').run(id).changes) rows.push(row)
+      }
+      return rows
     })
+    for (const row of removed) {
+      recordChange({ subjectType: 'upstream', subjectId: row.id, subjectName: row.name, action: 'delete' })
+    }
+    return { deleted: removed.length }
   } catch (e) {
     if (isForeignKeyViolation(e)) return { error: '还有应用的别名指向这个服务商，先在应用里改掉这些别名' }
     throw e
@@ -251,7 +290,15 @@ route('POST', '/api/channel', ({ body }) => {
   if (error || !fields) return fail(error ?? '参数错误')
   try {
     const id = insertUpstream(fields)
-    return ok(toChannel(getUpstream(id)!))
+    const created = getUpstream(id)!
+    recordChange({
+      subjectType: 'upstream',
+      subjectId: id,
+      subjectName: created.name,
+      action: 'create',
+      changes: upstreamChanges(undefined, fields),
+    })
+    return ok(toChannel(created))
   } catch (e) {
     if (isUniqueViolation(e)) return fail(SLUG_TAKEN)
     throw e
@@ -260,7 +307,8 @@ route('POST', '/api/channel', ({ body }) => {
 
 route('PUT', '/api/channel', ({ body }) => {
   const id = Number((body as { id?: unknown })?.id)
-  if (!getUpstream(id)) return fail('服务商不存在')
+  const before = getUpstream(id)
+  if (!before) return fail('服务商不存在')
   const { fields, error } = readUpstreamInput(body, true)
   if (error || !fields) return fail(error ?? '参数错误')
   try {
@@ -269,7 +317,15 @@ route('PUT', '/api/channel', ({ body }) => {
     if (isUniqueViolation(e)) return fail(SLUG_TAKEN)
     throw e
   }
-  return ok(toChannel(getUpstream(id)!))
+  const updated = getUpstream(id)!
+  recordChange({
+    subjectType: 'upstream',
+    subjectId: id,
+    subjectName: updated.name,
+    action: 'update',
+    changes: upstreamChanges(before, fields),
+  })
+  return ok(toChannel(updated))
 })
 
 route('POST', '/api/channel/:id/status', ({ params, body }) => {
@@ -277,6 +333,7 @@ route('POST', '/api/channel/:id/status', ({ params, body }) => {
   if (!row) return fail('服务商不存在')
   const status = Number((body as { status?: unknown })?.status) === UPSTREAM_STATUS.ENABLED ? 1 : 2
   updateUpstream(row.id, { status })
+  recordUpstreamStatus(row, status)
   return ok(true)
 })
 
@@ -284,7 +341,12 @@ route('POST', '/api/channel/status/batch', ({ body }) => {
   const { ids, status } = (body ?? {}) as { ids?: unknown; status?: unknown }
   if (!Array.isArray(ids)) return fail('参数错误')
   const value = Number(status) === UPSTREAM_STATUS.ENABLED ? 1 : 2
-  for (const id of ids) updateUpstream(Number(id), { status: value })
+  for (const id of ids) {
+    const row = getUpstream(Number(id))
+    if (!row) continue
+    updateUpstream(row.id, { status: value })
+    recordUpstreamStatus(row, value)
+  }
   return ok(ids.length)
 })
 
@@ -308,7 +370,15 @@ route('POST', '/api/channel/copy/:id', ({ params, query }) => {
   const { id: _id, created_at: _c, test_time: _t, response_time: _r, ...rest } = row
   let slug = `${row.slug}-copy`
   for (let n = 2; getUpstreamBySlug(slug); n++) slug = `${row.slug}-copy${n}`
-  const id = insertUpstream({ ...rest, slug, name: `${row.name}${query.get('suffix') ?? '_复制'}` })
+  const name = `${row.name}${query.get('suffix') ?? '_复制'}`
+  const id = insertUpstream({ ...rest, slug, name })
+  recordChange({
+    subjectType: 'upstream',
+    subjectId: id,
+    subjectName: name,
+    action: 'copy',
+    changes: [{ label: '复制自', to: row.name }],
+  })
   return ok({ id })
 })
 

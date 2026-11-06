@@ -11,6 +11,7 @@ import {
   nowSeconds,
   transaction,
 } from '../db'
+import { diffFields, fmt, recordChange, type FieldSpec } from '../changes'
 import { fail, ok, pageParams, type ApiRequest } from '../router'
 import { route } from './registry'
 
@@ -35,6 +36,17 @@ const SELECT_APP = `SELECT apps.*, (SELECT MAX(last_used_at) FROM tokens WHERE t
 export const APP_STATUS = { ENABLED: 1, DISABLED: 2 } as const
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/
 const ALIAS_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
+
+/** 变更记录里列哪些字段；应用标识创建后不能改，不用列 */
+const APP_FIELDS: Record<string, FieldSpec> = {
+  name: { label: '名称' },
+  quota: { label: '额度', format: fmt.quota },
+  quota_period: { label: '额度周期', format: fmt.quotaPeriod },
+  remark: { label: '备注' },
+}
+
+/** 变更记录里应用显示的名字 */
+const appLabel = (app: Pick<AppRow, 'name' | 'slug'>) => app.name || app.slug
 
 function monthStart(now = new Date()): number {
   return Math.floor(new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000)
@@ -143,7 +155,15 @@ route('POST', '/api/user', ({ body }) => {
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
       .run(fields.slug!, fields.name!, fields.quota!, fields.quota_period!, monthStart(), fields.remark!, now)
-    return ok(toUser(getApp(Number(result.lastInsertRowid))!))
+    const app = getApp(Number(result.lastInsertRowid))!
+    recordChange({
+      subjectType: 'app',
+      subjectId: app.id,
+      subjectName: appLabel(app),
+      action: 'create',
+      changes: [{ label: '应用标识', to: app.slug }, ...diffFields(undefined, fields, APP_FIELDS)],
+    })
+    return ok(toUser(app))
   } catch (e) {
     if (isUniqueViolation(e)) return fail('应用标识已存在')
     throw e
@@ -165,12 +185,24 @@ route('PUT', '/api/user', ({ body }) => {
       .prepare(`UPDATE apps SET ${entries.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
       .run(...entries.map(([, v]) => v as string | number), id)
   }
-  return ok(toUser(getApp(id)!))
+  const updated = getApp(id)!
+  recordChange({
+    subjectType: 'app',
+    subjectId: id,
+    subjectName: appLabel(updated),
+    action: 'update',
+    changes: diffFields(app as unknown as Record<string, unknown>, fields, APP_FIELDS),
+  })
+  return ok(toUser(updated))
 })
 
 route('DELETE', '/api/user/:id', ({ params }) => {
+  const app = getApp(Number(params.id))
   const result = db().prepare('DELETE FROM apps WHERE id = ?').run(Number(params.id))
-  return result.changes ? ok() : fail('应用不存在')
+  if (!result.changes || !app) return fail('应用不存在')
+  // 别名和密钥随应用一起删（外键级联），这里只记应用这一条
+  recordChange({ subjectType: 'app', subjectId: app.id, subjectName: appLabel(app), action: 'delete' })
+  return ok()
 })
 
 // 启用 / 禁用（NewAPI 还有提升 / 降级，Conduit 的应用没有角色）
@@ -182,6 +214,14 @@ route('POST', '/api/user/manage', ({ body }) => {
     action === 'enable' ? APP_STATUS.ENABLED : action === 'disable' ? APP_STATUS.DISABLED : undefined
   if (!status) return fail('不支持的操作')
   db().prepare('UPDATE apps SET status = ? WHERE id = ?').run(status, app.id)
+  if (status !== app.status) {
+    recordChange({
+      subjectType: 'app',
+      subjectId: app.id,
+      subjectName: appLabel(app),
+      action: status === APP_STATUS.ENABLED ? 'enable' : 'disable',
+    })
+  }
   return ok({ role: 1, status })
 })
 
@@ -230,6 +270,7 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
     aliases.push({ name, upstream_id: upstreamId, upstream_model: upstreamModel })
   }
 
+  const before = listAliases(app.id)
   try {
     transaction(() => {
       db().prepare('DELETE FROM aliases WHERE app_id = ?').run(app.id)
@@ -242,8 +283,35 @@ route('PUT', '/api/app/:id/aliases', ({ params, body }: ApiRequest) => {
     if (isForeignKeyViolation(e)) return fail('选择的服务商不存在')
     throw e
   }
-  return ok(listAliases(app.id))
+  const after = listAliases(app.id)
+  recordAliasChanges(app, before, after)
+  return ok(after)
 })
+
+/** 别名是整体替换的，这里按名称逐个对比，新增、删除、改指向各记一条 */
+function recordAliasChanges(
+  app: AppRow,
+  before: (AliasRow & { upstream_name: string })[],
+  after: (AliasRow & { upstream_name: string })[]
+) {
+  const target = (a: AliasRow & { upstream_name: string }) => `${a.upstream_name} / ${a.upstream_model}`
+  const record = (name: string, action: 'create' | 'update' | 'delete', from?: string, to?: string) =>
+    recordChange({
+      subjectType: 'alias',
+      subjectId: app.id,
+      subjectName: `${appLabel(app)} · ${name}`,
+      action,
+      changes: [{ label: '指向', from, to }],
+    })
+  for (const a of after) {
+    const old = before.find((b) => b.name === a.name)
+    if (!old) record(a.name, 'create', undefined, target(a))
+    else if (target(old) !== target(a)) record(a.name, 'update', target(old), target(a))
+  }
+  for (const b of before) {
+    if (!after.some((a) => a.name === b.name)) record(b.name, 'delete', target(b), undefined)
+  }
+}
 
 // 别名列表：传 app_id 时只列该应用的别名（概览页的示例请求用）
 route('GET', '/api/user/models', ({ query }) => {
