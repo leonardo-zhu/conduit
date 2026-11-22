@@ -62,3 +62,43 @@ function pickTypeField(text: string): string | undefined {
   const rest = text.replace(/"type"\s*:\s*"error"/, '')
   return pickField(rest, 'type')
 }
+
+export interface ErrorSummary {
+  /** 服务商返回的 HTTP 状态码；流内错误、连不上、超时等没有 */
+  status?: string
+  /** 错误码：code，没有就用 type */
+  code?: string
+  /** 一句话说明：message，没有就是去掉前缀后的原文 */
+  message: string
+}
+
+/** 网关记的“服务商返回 400：{...}”，改名前是“上游返回” */
+const RETURNED_PREFIX = /^(?:服务商|上游)返回 (\d{3})：/
+
+/**
+ * 错误日志的一行摘要，给使用日志表格这类放不下全文的地方用：
+ * “服务商返回 400：{"error":{"code":"X","message":"Y"}}” → { status: '400', code: 'X', message: 'Y' }。
+ * 不是服务商 JSON 报错（连不上、超时、流内错误等）时 message 就是原文。
+ */
+export function summarizeProviderError(raw: string): ErrorSummary {
+  const text = raw.trim()
+  const prefix = RETURNED_PREFIX.exec(text)
+  const status = prefix?.[1]
+  const body = prefix ? text.slice(prefix[0].length).trim() : text
+  if (!body.startsWith('{')) return { status, message: body || text }
+
+  let code: string | undefined
+  let message: string | undefined
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>
+    const inner = (parsed.error && typeof parsed.error === 'object' ? parsed.error : parsed) as Record<string, unknown>
+    const str = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : undefined)
+    code = str(inner.code) ?? str(inner.type)
+    message = str(inner.message) ?? str(parsed.message)
+  } catch {
+    // 旧日志的正文截在 300 字，按字段名抠
+    code = pickField(body, 'code') ?? pickTypeField(body)
+    message = pickField(body, 'message')
+  }
+  return { status, code, message: message || body }
+}
