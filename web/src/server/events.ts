@@ -10,8 +10,9 @@ import { pushEventToTelegram } from './telegram'
 
 export type EventKind =
   | 'upstream_auth' // 上游返回 401 / 403，多半是密钥失效或没有权限
+  | 'upstream_account' // 上游的 4xx 报错像是账户问题（订阅过期、欠费、余额不足）
   | 'upstream_rate_limit' // 上游返回 429
-  | 'upstream_failing' // 上游连续失败（5xx、超时、连不上）
+  | 'upstream_failing' // 上游连续失败（5xx、超时、连不上，或服务商返回的其他 4xx）
   | 'quota_warning' // 应用或令牌的额度用到 80%
   | 'quota_exhausted' // 额度用尽，之后被拒的请求也计入次数
   | 'error_rate' // 应用最近 10 分钟的上游类失败占一半以上

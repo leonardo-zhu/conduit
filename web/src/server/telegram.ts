@@ -24,6 +24,7 @@ function telegramConfig() {
 
 const KIND_LABEL: Record<EventKind, string> = {
   upstream_auth: '服务商拒绝密钥',
+  upstream_account: '服务商账户异常',
   upstream_rate_limit: '服务商限流',
   upstream_failing: '服务商连续失败',
   quota_warning: '额度将尽',
