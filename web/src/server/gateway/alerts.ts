@@ -2,10 +2,12 @@
  * 网关请求结束后的异常检测，发现问题就记事件（见 ../events.ts）。
  *
  * - 上游：401 / 403 记“密钥失效”，429 记“限流”，连续 3 次 5xx / 超时 / 连不上记“连续失败”
+ * - 服务商返回的其他 4xx：正文像账户问题（订阅过期、欠费）的直接记“账户异常”，其余也计入“连续失败”
+ *   （方舟订阅过期返回的是 400，按状态码当成调用方的错会漏掉）
  * - 额度：应用或令牌的用量这次越过 80% / 100% 时记一次；用尽后被拒的请求计入“用尽”的次数
  * - 错误率：应用最近 10 分钟至少 10 个请求、上游类失败占一半以上
  *
- * 调用方断开（499）和参数错误（4xx）是调用方的问题，不算异常。
+ * 调用方断开（499）是调用方的问题，不算异常。
  */
 import { db, nowSeconds } from '../db'
 import { safeRaiseEvent, type EventField } from '../events'
@@ -17,12 +19,24 @@ const ERROR_RATE_WINDOW = 600
 const ERROR_RATE_MIN_REQUESTS = 10
 const ERROR_RATE_CHECK_INTERVAL = 60
 
-/** 上游类失败：鉴权、限流、5xx（含网关记的 502 连不上、504 超时） */
-const UPSTREAM_FAILURE_SQL = 'status_code IN (401, 403, 429) OR status_code >= 500'
+/** handler.ts 记服务商报错的前缀（改名前是“上游返回”） */
+const PROVIDER_ERROR_PREFIX = /^(?:上游|服务商)返回 \d+：/
 
-function isUpstreamFailure(status: number) {
-  return status === 401 || status === 403 || status === 429 || status >= 500
+/** 上游类失败：服务商返回的 4xx（不含调用方断开的 499）、5xx（含网关记的 502 连不上、504 超时） */
+const UPSTREAM_FAILURE_SQL =
+  "status_code >= 500 OR (status_code BETWEEN 400 AND 498 AND (error LIKE '服务商返回 %' OR error LIKE '上游返回 %'))"
+
+function isUpstreamFailure(status: number, error: string) {
+  return status >= 500 || isProviderRejection(status, error)
 }
+
+/** 服务商自己返回的 4xx（网关在转发前拒绝的请求不写用量记录，499 是调用方断开） */
+function isProviderRejection(status: number, error: string) {
+  return status >= 400 && status < 500 && status !== 499 && PROVIDER_ERROR_PREFIX.test(error)
+}
+
+/** 正文像账户问题：订阅过期、欠费、余额不足。各家放在 400 / 402 / 403 里都有 */
+const ACCOUNT_PROBLEM = /subscription|overdue|arrear|balance|billing|payment|insufficient_quota|expired|欠费|余额|订阅|过期|充值/i
 
 // 只在内存里记：重启后从零开始，不影响什么
 const globalRef = globalThis as typeof globalThis & {
@@ -48,7 +62,7 @@ const formatTokens = (n: number) => n.toLocaleString('en-US')
 const percent = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`
 
 /** handler.ts 记的错误是“服务商返回 401：<响应正文>”（改名前是“上游返回”），推送时只要正文，正文是 JSON 才能排版 */
-const upstreamBody = (error: string) => error.replace(/^(?:上游|服务商)返回 \d+：/, '').slice(0, 500)
+const upstreamBody = (error: string) => error.replace(PROVIDER_ERROR_PREFIX, '').slice(0, 500)
 
 export interface RequestOutcome {
   auth: GatewayAuth
@@ -63,7 +77,7 @@ export function checkAfterRequest(outcome: RequestOutcome) {
   try {
     checkUpstream(outcome)
     checkQuotaCrossing(outcome)
-    if (isUpstreamFailure(outcome.statusCode)) checkErrorRate(outcome.auth)
+    if (isUpstreamFailure(outcome.statusCode, outcome.error)) checkErrorRate(outcome.auth)
   } catch (error) {
     console.error('[alerts] 检测失败', error)
   }
@@ -105,7 +119,20 @@ function checkUpstream({ auth, target, statusCode, error }: RequestOutcome) {
     })
     return
   }
-  if (statusCode >= 500) {
+  if (isProviderRejection(statusCode, error) && ACCOUNT_PROBLEM.test(upstreamBody(error))) {
+    safeRaiseEvent({
+      ...base,
+      kind: 'upstream_account',
+      level: 'error',
+      title: `服务商 ${upstream.name} 的账户有问题（${statusCode}）`,
+      detail: `订阅可能过期、欠费或余额不足。${error}`.slice(0, 500),
+      link: '/channels',
+      fields: [['服务商', upstream.name], ['状态码', String(statusCode)], trigger, ['可能原因', '订阅过期、欠费或余额不足']],
+      raw: upstreamBody(error),
+    })
+    return
+  }
+  if (statusCode >= 500 || isProviderRejection(statusCode, error)) {
     const streak = (failStreak.get(upstream.id) ?? 0) + 1
     failStreak.set(upstream.id, streak)
     if (streak >= FAILING_STREAK) {
