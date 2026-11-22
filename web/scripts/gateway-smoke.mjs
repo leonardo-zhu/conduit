@@ -76,12 +76,14 @@ try {
 // 准备
 // ---------------------------------------------------------------------------
 
-db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%';")
+db.exec("DELETE FROM apps WHERE slug LIKE 'smoke-gw%'; DELETE FROM upstreams WHERE name LIKE 'smoke-gw%'; DELETE FROM events WHERE subject_name LIKE 'smoke-gw%';")
 await admin('POST', '/api/user/login', { username: 'admin', password: PASSWORD })
 
 const chatUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chat', slug: 'smoke-gw-chat', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'mock-chat-key' } })
 const nativeUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-native', slug: 'smoke-gw-native', responses_mode: 'native', base_url: MOCK_FOR_GATEWAY, anthropic_base_url: `${MOCK_FOR_GATEWAY}/anthropic/`, key: 'mock-native-key' } })
 const offUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-off', slug: 'smoke-gw-off', models: 'normal', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k', status: 2 } })
+// 服务商 4xx 的提醒单独用一个上游，免得和其他用例的连续失败计数混在一起
+const rejectUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-reject', slug: 'smoke-gw-reject', responses_mode: 'convert', base_url: MOCK_FOR_GATEWAY, key: 'k' } })
 const chatOnlyUp = await admin('POST', '/api/channel', { channel: { name: 'smoke-gw-chatonly', slug: 'smoke-gw-chatonly', models: 'normal', base_url: MOCK_FOR_GATEWAY, key: 'mock-chatonly-key' } })
 check('按指定的 Responses 方式保存', nativeUp.responses_mode === 'native', nativeUp.responses_mode)
 check('新建上游默认不提供 Responses', chatOnlyUp.responses_mode === 'none', chatOnlyUp.responses_mode)
@@ -98,6 +100,8 @@ await admin('PUT', `/api/app/${app.id}/aliases`, {
     alias('smoke-gw-slow', chatUp, 'slow'),
     alias('smoke-gw-error', chatUp, 'error'),
     alias('smoke-gw-off', offUp, 'normal'),
+    alias('smoke-gw-expired', rejectUp, 'expired'),
+    alias('smoke-gw-badparam', rejectUp, 'badparam'),
     alias('smoke-gw-hidden', chatUp, 'normal'),
     alias('smoke-gw-chatonly', chatOnlyUp, 'normal'),
   ],
@@ -282,6 +286,19 @@ check('上游 500 → 502 upstream_error，不透出上游细节', res.status ==
 log = lastLog('smoke-gw-req-6')
 check('记录错误、不扣额度', log?.status_code === 500 && log.error.includes('exploded') && tokenUsed(token.id) === beforeError, log)
 
+// 提醒推送 Telegram 是异步的、不等结果；本地没配 Telegram 时不推
+const eventOf = (kind) => db.prepare('SELECT * FROM events WHERE kind = ? AND subject_id = ?').get(kind, rejectUp.id)
+res = await gw('/v1/responses', key, { model: 'smoke-gw-expired', input: 'hi' })
+check('服务商 400 → 调用方收到 400', res.status === 400, res.status)
+let event = eventOf('upstream_account')
+check('服务商 400 且正文是订阅过期：第一次就记“账户异常”', event?.level === 'error' && event.detail.includes('InvalidSubscription'), event)
+
+for (let i = 0; i < 2; i++) await gw('/v1/responses', key, { model: 'smoke-gw-badparam', input: 'hi' })
+check('服务商普通 400 两次：还不记“连续失败”', !eventOf('upstream_failing'), eventOf('upstream_failing'))
+await gw('/v1/responses', key, { model: 'smoke-gw-badparam', input: 'hi' })
+event = eventOf('upstream_failing')
+check('服务商普通 400 连续三次：记“连续失败”', event?.title.includes('连续 3 次') && event.detail.includes('InvalidParameter'), event)
+
 // ---------------------------------------------------------------------------
 console.log('\n调用方中途断开')
 
@@ -340,7 +357,8 @@ check('应用的请求次数只计成功的请求', app2.request_count > 0, app2
 console.log('\n清理')
 db.exec("DELETE FROM usage_logs WHERE app_slug = 'smoke-gw'")
 await admin('DELETE', `/api/user/${app.id}`)
-await admin('POST', '/api/channel/batch', { ids: [chatUp.id, nativeUp.id, offUp.id, chatOnlyUp.id] })
+await admin('POST', '/api/channel/batch', { ids: [chatUp.id, nativeUp.id, offUp.id, chatOnlyUp.id, rejectUp.id] })
+db.exec("DELETE FROM events WHERE subject_name LIKE 'smoke-gw%'")
 console.log('已删除测试数据')
 
 console.log(failed ? `\n${failed} 项失败` : '\n全部通过')

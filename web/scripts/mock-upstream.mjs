@@ -9,6 +9,8 @@
  *   nousage  流式时不返回 usage
  *   slow     流式慢慢吐 50 个片段（每 100ms 一个），用来测调用方中途断开
  *   error    返回 500
+ *   expired  返回 400，正文是方舟订阅过期的报错
+ *   badparam 返回 400，正文是普通的参数错误
  *
  * GET /_last 返回最近一次收到的请求（路径、请求体和鉴权相关的头），GET /_stats 返回被中途断开的流的数量。
  *
@@ -29,6 +31,14 @@ async function chat(req, res, body) {
   if (model === 'error') {
     res.writeHead(500, { 'Content-Type': 'application/json' })
     return res.end(JSON.stringify({ error: { message: 'mock upstream exploded' } }))
+  }
+  if (model === 'expired' || model === 'badparam') {
+    res.writeHead(400, { 'Content-Type': 'application/json' })
+    const error =
+      model === 'expired'
+        ? { code: 'InvalidSubscription', message: 'Your account does not have a valid AgentPlan subscription, or your subscription has expired.' }
+        : { code: 'InvalidParameter', message: 'The parameter `temperature` specified in the request is not valid.' }
+    return res.end(JSON.stringify({ error }))
   }
   const id = 'chatcmpl-mock1'
   const base = { id, object: 'chat.completion.chunk', created: 1700000000, model }
