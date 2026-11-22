@@ -104,7 +104,7 @@ function requestChars(body: Body): number {
 }
 
 function upstreamErrorFor(status: number, text: string): GatewayError {
-  const detail = `服务商返回 ${status}：${text.slice(0, 300)}`
+  const detail = `服务商返回 ${status}：${text}`
   // 参数类错误多半是请求本身的问题，转成 400 让调用方知道；鉴权、限流、5xx 都是上游的问题
   if ([400, 404, 413, 422].includes(status)) {
     return new GatewayError('invalid_request_error', 'upstream_rejected', `服务商拒绝了请求（${status}）`, detail)

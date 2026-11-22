@@ -1083,7 +1083,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
 
 /**
  * Conduit: 错误日志的内容多是“服务商返回 500：{...}”。前缀照常显示，JSON 缩进排版；
- * 正文被截断（网关只存前 300 字）解析不了时，抠出 code / type / message 逐行列出
+ * 正文被截断（2026-11 之前网关只存前 300 字）解析不了时，抠出 code / type / message 逐行列出
  */
 function LogContent({ text }: { text: string }) {
   const start = text.indexOf('{')

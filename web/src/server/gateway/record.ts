@@ -9,6 +9,12 @@ import { db, nowSeconds, transaction } from '../db'
 import { checkAfterRequest } from './alerts'
 import type { GatewayAuth, RouteTarget } from './context'
 
+/**
+ * 错误信息最多存这么多字。服务商的报错正文常带很长的链接（方舟订阅过期的报错有 300 多字），
+ * 原来各处截到 300 字，message 会断在半句；错误日志很少，多存一些不占地方。
+ */
+const ERROR_TEXT_LIMIT = 2000
+
 export interface UsageEntry {
   requestId: string
   auth: GatewayAuth
@@ -25,7 +31,8 @@ export interface UsageEntry {
   ip: string
 }
 
-export function recordUsage(entry: UsageEntry) {
+export function recordUsage(input: UsageEntry) {
+  const entry = { ...input, error: input.error.slice(0, ERROR_TEXT_LIMIT) }
   const charge = entry.inputTokens + entry.outputTokens
   const now = nowSeconds()
   transaction(() => {
