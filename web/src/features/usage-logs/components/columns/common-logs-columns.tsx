@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/tooltip'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { formatLogQuota, formatTimestampToDate } from '@/lib/format'
+import { summarizeProviderError } from '@/lib/provider-error'
 import { cn } from '@/lib/utils'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
@@ -65,6 +66,27 @@ interface DetailSegment {
   text: string
   muted?: boolean
   danger?: boolean
+}
+
+/**
+ * Conduit: 错误日志的摘要。第一行是状态码和错误码，第二行是 message（放不下就省略，悬停看全文），
+ * 不再直接截原文开头（原来每行都是“服务商返回 400：{"error":{"co…”）。
+ */
+function ErrorSummaryPreview({ content }: { content: string }) {
+  const { status, code, message } = summarizeProviderError(content)
+  const tags = [status, code].filter(Boolean).join(' · ')
+  return (
+    <span className='flex min-w-0 flex-col gap-0.5' title={message}>
+      {tags && (
+        <span className='truncate font-mono text-[11px] text-red-600 dark:text-red-400'>
+          {tags}
+        </span>
+      )}
+      <span className='text-muted-foreground truncate leading-snug group-hover:underline'>
+        {message}
+      </span>
+    </span>
+  )
 }
 
 function buildDetailSegments(
@@ -600,6 +622,8 @@ export function useCommonLogsColumns(
                 )}
               </span>
             )
+          } else if (log.type === 5 && log.content) {
+            detailPreview = <ErrorSummaryPreview content={log.content} />
           } else if (log.content) {
             detailPreview = (
               <span className='text-muted-foreground truncate group-hover:underline'>
